@@ -16,13 +16,16 @@ Screenshot
 
 ## Current State
 
-The first macOS vertical slice and its guarded Google Calendar boundary are
-implemented. `SnapCal.xcodeproj` contains a SwiftUI app and XCTest target that
-validate a selected PNG, JPEG, or HEIC, run Vietnamese-English Apple Vision OCR
-locally, derive an evidence-bearing typed draft, present an editable review,
-and create a Google Calendar event only after a separate confirmation dialog.
-Images and drafts remain in memory. The Google refresh token is the only
-persisted value and is stored in macOS Keychain.
+The macOS vertical slice, guarded Google Calendar boundary, and opt-in Gemini
+Accuracy Mode are implemented. `SnapCal.xcodeproj` validates a selected PNG,
+JPEG, or HEIC, runs Vietnamese-English Apple Vision OCR, derives an
+evidence-bearing typed draft, presents an editable review, and creates a Google
+Calendar event only after a separate confirmation dialog. Local Only is the
+default and makes no cloud extraction call. Accuracy Mode sends the image and
+layout-aware OCR to a loopback FastAPI proxy, which keeps the Gemini credential
+out of the app and validates Gemini 2.5 Flash structured output. Images and
+drafts remain in memory. The Google refresh token is the only persisted value
+and is stored in macOS Keychain.
 
 The root `SPEC.md` is the supplied source snapshot. The smaller files under
 `docs/product/`, the active story packets, executable proof, and accepted
@@ -31,17 +34,38 @@ decisions are the living contract for ongoing work.
 ## Open And Run
 
 Open `SnapCal.xcodeproj` in Xcode, select the `SnapCal` scheme and **My Mac**, then
-press **Run** (`Command-R`). The deployment target is macOS 14.0. No package
-installation or API key is required. A Google account listed as an OAuth test
-user is required for the live Calendar flow. The downloaded desktop credential
-JSON stays outside this repository; the app embeds only its public OAuth client
-ID and never embeds or reads the client secret.
+press **Run** (`Command-R`). The deployment target is macOS 14.0. Local Only
+requires no package installation or API key. A Google account listed as an
+OAuth test user is required for the live Calendar flow. The downloaded desktop
+credential JSON stays outside this repository; the app embeds only its public
+OAuth client ID and never embeds or reads the client secret.
+
+Accuracy Mode requires a separate Gemini authorization key. Do not use the
+Google Calendar OAuth JSON for this. Create the local service once:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r services/extraction-api/requirements.txt
+```
+
+Then start it in a separate Terminal window before selecting Accuracy Mode:
+
+```bash
+export GEMINI_API_KEY='your-dedicated-gemini-key'
+scripts/run-extraction-api.sh
+```
+
+The default service is bound only to `127.0.0.1:8765`. The model can be changed
+with `SNAPCAL_GEMINI_MODEL`; the current default is `gemini-2.5-flash`.
 
 Run the complete test target from Terminal with:
 
 ```bash
 xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
   -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+
+.venv/bin/python -m pip install -r services/extraction-api/requirements-dev.txt
+.venv/bin/python -m pytest services/extraction-api/tests -q
 ```
 
 ## Product Rules That Must Not Drift
@@ -64,7 +88,7 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
 3. Add the macOS menu-bar and top-center drop-zone experience.
 4. Harden reminders, locations, duplicates, and privacy controls.
 5. Add iOS and Android share flows.
-6. Add preferences, local-only mode, and App Intents/Shortcuts.
+6. Add preferences and App Intents/Shortcuts.
 
 ## Repository Map
 
@@ -105,7 +129,8 @@ and do not initialize or mutate Harness state.
 
 ## What Is Deliberately Not Here Yet
 
-There is no backend, database schema, benchmark corpus, mobile app, or CI
-workflow. The live Google OAuth/create path still requires one user-driven
-platform proof because SnapCal must never consent or create an event on the
-user's behalf.
+There is no production backend deployment, database schema, benchmark corpus,
+mobile app, or CI workflow. Live Gemini extraction still requires a dedicated
+key and one user-driven poster proof. The live Google OAuth/create path also
+requires a user-driven platform proof because SnapCal must never consent or
+create an event on the user's behalf.

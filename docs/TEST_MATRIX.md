@@ -52,7 +52,11 @@ Vietnamese and English date/time extraction, no-event refusal, ambiguity
 surfacing, and valid/failure model transitions. US-002 adds unit and adapter
 proof for timed/all-day Calendar mapping, PKCE/state validation, strict provider
 responses, recoverable errors, and the rule that request/cancel paths make zero
-provider calls while confirmation makes exactly one. The macOS target builds
-and all 22 tests pass. Live browser consent, loopback callback, Keychain, and one
-confirmed Calendar event remain a user-driven platform/E2E proof; deletion,
-cloud isolation, and benchmark gates remain unimplemented.
+provider calls while confirmation makes exactly one. US-003 adds layout-aware
+OCR, all-day range semantics, opt-in Gemini proxy contracts, strict response
+validation, visible fallback, and executable proof that Local Only makes zero
+cloud calls and the client contains no provider credential. The macOS target
+builds and all 30 XCTest cases pass; the FastAPI suite adds 5 passing contract
+tests and its loopback health endpoint is proven. Live Gemini output, browser
+consent, Keychain, and one confirmed Calendar event remain user-driven proofs;
+deletion and the benchmark gates remain unimplemented.

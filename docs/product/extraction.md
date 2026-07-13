@@ -33,24 +33,29 @@ unvalidated model payload to the client.
 
 ## Modes
 
-### Fast Mode
+### Local Only
 
-Use local OCR, vision-language extraction, normalization, and review when the
-image is clear and required evidence is strong.
+Use Apple Vision OCR, deterministic layout-aware extraction, normalization,
+and review without sending the image or OCR off-device. This is the default.
 
 ### Accuracy Mode
 
-Add cloud OCR when local evidence is short, fragmented, low-confidence,
-diacritic-damaged, or visually complex. Provider fallback must be visible to
-the user because image or text may leave the device.
+The user explicitly opts in before import. Send a bounded image plus local OCR
+and normalized layout boxes to the loopback extraction service. Gemini 2.5
+Flash proposes a strict evidence-bearing event. If it is unavailable or invalid,
+fall back visibly to the deterministic local candidate. Cloud OCR is not part
+of this slice.
 
 ## Provider Policy
 
 - Apple Vision is the preferred local OCR pre-pass on macOS/iOS.
 - Cloud OCR is a replaceable port; Google Cloud Vision is the initial candidate
   because Vietnamese is a required language.
-- Vision-language extraction is a replaceable port with a strict event-draft
-  schema. OpenAI and Gemini are candidates, not domain dependencies.
+- Gemini 2.5 Flash is the initial vision-language adapter behind a replaceable
+  port and strict versioned schema; it is not a domain dependency.
+- The Gemini key belongs only to the FastAPI process environment. The macOS app
+  sends no provider credential and accepts only HTTPS or loopback HTTP service
+  addresses.
 - Provider output is untrusted boundary data and must be parsed before entering
   application or domain layers.
 - Provider names, prompts, thresholds, and retries belong in configuration and

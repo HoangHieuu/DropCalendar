@@ -2,14 +2,14 @@
 
 ## Current State
 
-The repository contains a macOS 14 SwiftUI app and XCTest target. The implemented
-boundary keeps extraction local and drafts in memory: native file import,
-strict image validation, Apple Vision OCR, deterministic Vietnamese-English
-extraction, a typed evidence-bearing draft, and editable review. A narrow
-infrastructure boundary now adds Google desktop OAuth with PKCE, device-only
-Keychain refresh-token storage, and direct Google Calendar REST creation after
-explicit confirmation. There is no backend, database, benchmark corpus, or
-deployment configuration.
+The repository contains a macOS 14 SwiftUI app, XCTest target, and a loopback
+FastAPI extraction service. Local Only keeps extraction on-device. Opt-in
+Accuracy Mode sends a bounded JPEG plus layout-aware Apple Vision OCR to the
+local service, which owns the Gemini credential and validates strict Gemini
+2.5 Flash structured output. Drafts remain in memory. Google desktop OAuth with
+PKCE stores its refresh token in Keychain and Calendar REST creation remains
+behind explicit confirmation. There is no production deployment, database, or
+benchmark corpus.
 
 ## First Vertical Slice
 
@@ -18,7 +18,8 @@ The initial implementation target is macOS-first:
 ```text
 SwiftUI manual image import and review
   -> Apple Vision local OCR
-  -> deterministic local extraction service boundary
+  -> Local Only deterministic extraction
+     or opt-in loopback FastAPI -> Gemini 2.5 Flash
   -> typed event-draft result
   -> in-memory editable review
   -> explicit confirmation state machine
@@ -26,10 +27,9 @@ SwiftUI manual image import and review
   -> Google Calendar REST events.insert
 ```
 
-The spec recommends FastAPI for the extraction backend, a vision-language
-provider with structured output, Google Cloud Vision as OCR fallback, and
-Google Places/Geocoding for location candidates. These remain target choices,
-not installed dependencies or completed integrations.
+FastAPI and Gemini structured extraction are now implemented for local
+development. Google Cloud Vision OCR fallback and Google Places/Geocoding
+remain deferred target choices.
 
 ## Calendar Write Boundary
 
@@ -101,15 +101,19 @@ versioned schema and fixtures where appropriate.
 untrusted image
   -> validation and metadata
   -> local OCR
-  -> deterministic local candidate
+  -> deterministic local candidate with layout boxes
+  -> Local Only returns the local candidate, or
+  -> Accuracy Mode sends image + OCR to 127.0.0.1 proxy
+  -> proxy calls Gemini 2.5 Flash with store=false
+  -> strict versioned proposal validation and local/cloud disagreement checks
   -> normalization and deterministic consistency checks
   -> confidence and ambiguity rules
   -> typed draft
   -> mandatory review
 ```
 
-Optional cloud OCR and a structured VLM adapter remain future infrastructure;
-they must enter through the same inward-facing OCR and extraction protocols.
+Cloud OCR remains future infrastructure. The Gemini adapter enters through the
+inward-facing cloud-extraction protocol and is replaceable.
 
 Models propose fields; deterministic code validates dates, timezones, reminder
 limits, and state transitions. Provider confidence is evidence, not authority.
@@ -155,8 +159,8 @@ retention records and operational logs remain separate concerns.
 
 ## Decisions Required Before Implementation
 
-- Phase 2 extraction provider and server/local boundary, if local extraction is
-  not reliable enough against the benchmark.
+- Production hosting and secret-management boundary if Accuracy Mode moves
+  beyond the current loopback development service.
 - Versioned event-draft schema transport.
 - Benchmark asset licensing and private-data sanitization.
 - Whether any server-owned metadata requires PostgreSQL; default is no.

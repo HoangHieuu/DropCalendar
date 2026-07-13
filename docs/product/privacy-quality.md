@@ -7,6 +7,11 @@
 - Do not log image bytes, full OCR text, OAuth tokens, or private event content.
 - Disclose when images or OCR text are sent to cloud OCR or AI providers.
 - Local-only mode must prevent cloud calls and explain reduced accuracy.
+- Accuracy Mode is opt-in at import time and discloses that the image and OCR
+  are sent through the SnapCal service to Google Gemini.
+- The local service binds to `127.0.0.1` by default, keeps the Gemini key in its
+  environment, requests `store=false`, and does not log or persist request
+  bodies.
 - Failed extraction asks whether to retain the image for retry.
 - Screenshot history is opt-in and local-first.
 
