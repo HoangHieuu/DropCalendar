@@ -1,0 +1,1 @@
+"""SnapCal extraction service."""

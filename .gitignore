@@ -12,6 +12,14 @@ dist/
 
 # Local Xcode build products and derived data.
 .build/
+.venv/
+.env
+services/extraction-api/.env
+
+# Python caches and test output.
+__pycache__/
+.pytest_cache/
+*.pyc
 
 # Downloaded Harness CLI binary for installed project instances.
 scripts/bin/harness-cli
