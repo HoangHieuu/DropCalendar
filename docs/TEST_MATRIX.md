@@ -1,41 +1,58 @@
-# Test Matrix
+# SnapCal Test Matrix
 
-This file preserves the proof vocabulary and brownfield import shape used by
-Harness consumers. The authoritative operational matrix is stored in SQLite
-and queried with:
+The durable operational matrix is queried with:
 
 ```bash
 scripts/bin/harness-cli query matrix --active --summary
 ```
 
-The upstream Harness repository has implemented behavior and executable proof.
-An installed consumer starts without consumer-product rows and adds them only
-when real work is accepted. Do not mark a row implemented until tests or other
-validation evidence exist.
+This file defines the product proof vocabulary. A behavior becomes an
+operational row only when its story is accepted. Do not mark behavior
+implemented without fresh executable evidence.
 
-## Status Values
+## Non-Negotiable Safety Gates
 
-| Status | Meaning |
-| --- | --- |
-| planned | Accepted as intended behavior, not implemented |
-| in_progress | Actively being built |
-| implemented | Implemented and proof exists |
-| changed | Contract changed after earlier implementation |
-| retired | No longer part of the product contract |
+| ID | Behavior | Required proof |
+| --- | --- | --- |
+| SAFE-01 | No calendar provider call before explicit review confirmation | application unit plus integration spy; E2E/platform flow |
+| SAFE-02 | No date is invented without source evidence | parser unit suite plus benchmark negative cases |
+| SAFE-03 | Date/time disagreement becomes an ambiguity | deterministic unit cases plus extraction contract fixture |
+| SAFE-04 | Critical fields preserve evidence and confidence | schema/contract tests plus review UI assertion |
+| SAFE-05 | Raw screenshot is deleted by default after success | persistence integration and platform filesystem proof |
+| SAFE-06 | Logs exclude image bytes, full OCR, tokens, and private payloads | log capture/redaction tests |
+| SAFE-07 | Local-only mode makes no cloud call | adapter spy/network isolation proof |
 
-## Matrix
+## Functional Proof Areas
 
-No static product rows are shipped in this legacy view. Use `story add` and
-`story update` for operational records. Brownfield repositories may add rows
-here before importing their existing state.
+| Area | Unit | Integration | E2E | Platform | Benchmark |
+| --- | --- | --- | --- | --- | --- |
+| Image validation | format, count, corrupt metadata | import boundary | invalid/valid flow | clipboard/drop/share | fixture coverage |
+| Vietnamese-English normalization | abbreviations, diacritics, mixed text | extraction payload | editable draft | locale/timezone | language-separated accuracy |
+| Date/time/timezone | relative dates, all-day, conflict, past warning | provider-to-domain parse | review warnings | system timezone | critical error rate |
+| Location | raw preservation, online/hybrid | Places candidates | user choice | permission/error state | location accuracy |
+| Review | enablement, edit override, state machine | draft persistence | confirm/cancel/retry | macOS/iOS/Android UI | correction rate |
+| Calendar | mapping, reminder limits | OAuth and Calendar fake/server | success/failure/retry | redirect/keychain | create success rate |
+| Duplicates | hash and composite signals | local history | warning override | local storage | warning precision |
+| Privacy | retention policy | deletion and redacted logs | history controls | filesystem/keychain | corpus sanitation |
 
-## Evidence Rules
+## Benchmark Gates
 
-- Unit proof covers pure domain and application rules.
-- Integration proof covers backend enforcement, data integrity, provider
-  behavior, jobs, or service contracts.
-- E2E proof covers user-visible browser flows.
-- Platform proof covers only shell, deployment, mobile, desktop, or runtime
-  behavior that cannot be proven in lower layers.
-- A story can be implemented without every proof column if the story packet
-  explains why.
+- At least 100 licensed/sanitized screenshots: 50 Vietnamese or mixed, 30
+  English, and 20 noisy/decorative examples.
+- Report Vietnamese and English title/date/time/location metrics separately.
+- Track critical wrong-date/wrong-time rate and median extraction latency.
+- Every item yields a valid draft or a structured failure reason.
+- Re-run after OCR engine, prompt, schema, parser, or normalization changes.
+
+## Proof Status
+
+US-000 proves that the source spec is decomposed into living contracts. US-001
+adds executable proof for one-image validation, corrupt/unsupported rejection,
+Vietnamese and English date/time extraction, no-event refusal, ambiguity
+surfacing, and valid/failure model transitions. US-002 adds unit and adapter
+proof for timed/all-day Calendar mapping, PKCE/state validation, strict provider
+responses, recoverable errors, and the rule that request/cancel paths make zero
+provider calls while confirmation makes exactly one. The macOS target builds
+and all 22 tests pass. Live browser consent, loopback callback, Keychain, and one
+confirmed Calendar event remain a user-driven platform/E2E proof; deletion,
+cloud isolation, and benchmark gates remain unimplemented.

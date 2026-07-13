@@ -1,138 +1,162 @@
-# Architecture
+# SnapCal Architecture
 
-The upstream Harness product is implemented as a Rust workspace with a CLI and
-SQLite durable layer. Its primary source is `crates/harness-cli/`, organized
-into domain, application, infrastructure, and interface modules. Schema
-migrations live in `scripts/schema/`, while installers and validation scripts
-form the distribution boundary.
+## Current State
 
-The reusable template does not select an application stack for a consumer
-project. The discovery guidance below is for that consumer application after a
-user-provided spec and stack decision exist; it does not describe the upstream
-Harness CLI as unimplemented.
+The repository contains a macOS 14 SwiftUI app and XCTest target. The implemented
+boundary keeps extraction local and drafts in memory: native file import,
+strict image validation, Apple Vision OCR, deterministic Vietnamese-English
+extraction, a typed evidence-bearing draft, and editable review. A narrow
+infrastructure boundary now adds Google desktop OAuth with PKCE, device-only
+Keychain refresh-token storage, and direct Google Calendar REST creation after
+explicit confirmation. There is no backend, database, benchmark corpus, or
+deployment configuration.
 
-## Discovery Before Shape
+## First Vertical Slice
 
-Before proposing implementation shape, identify:
-
-- Product surfaces: browser, mobile, desktop, CLI, API, worker, or service.
-- Runtime stack: language, framework, database, queues, providers, and hosting.
-- Core domains: the product concepts that deserve stable names and contracts.
-- Boundary inputs: user input, API requests, webhooks, jobs, files, credentials,
-  provider payloads, and environment configuration.
-- Validation ladder: the smallest checks that can prove the selected stack.
-
-Record stack choices in `docs/decisions/` when they meaningfully constrain
-future work.
-
-## Default Layering
+The initial implementation target is macOS-first:
 
 ```text
+SwiftUI manual image import and review
+  -> Apple Vision local OCR
+  -> deterministic local extraction service boundary
+  -> typed event-draft result
+  -> in-memory editable review
+  -> explicit confirmation state machine
+  -> Google desktop OAuth (system browser + loopback callback + PKCE)
+  -> Google Calendar REST events.insert
+```
+
+The spec recommends FastAPI for the extraction backend, a vision-language
+provider with structured output, Google Cloud Vision as OCR fallback, and
+Google Places/Geocoding for location candidates. These remain target choices,
+not installed dependencies or completed integrations.
+
+## Calendar Write Boundary
+
+```text
+reviewed EventDraft
+  -> pure validation/mapping
+  -> awaitingConfirmation (zero provider calls)
+  -> explicit user confirmation
+  -> authorize or refresh
+  -> POST primary calendar event
+  -> success receipt or recoverable failure with draft preserved
+```
+
+The app embeds only the public desktop OAuth client ID. It never reads or
+bundles the downloaded credential JSON or client secret. The system browser
+handles Google sign-in; a short-lived `127.0.0.1` listener receives the callback.
+The requested scope is limited to creating events in calendars the user owns.
+
+## Product Boundaries
+
+```text
+surfaces
+  macOS app | iOS extension/app | Android app
+        |
+        v
+application
+  import image | extract event | review draft | create event | manage history
+        |
+        v
 domain
-  <- application
-      <- infrastructure
-          <- interface
-              <- app surfaces
+  event draft | evidence | confidence | ambiguity | date/time rules
+        ^
+        |
+infrastructure
+  OCR | VLM | calendar | places | SQLite | HTTP | keychain | logging
 ```
 
-## Consumer Candidate Structure
+Domain and application layers do not depend on SwiftUI, FastAPI, Google SDKs,
+model-provider SDKs, databases, or environment variables. Infrastructure
+implements ports defined inward.
+
+## Candidate Repository Shape
+
+The current and candidate shape is created incrementally as stories require it:
 
 ```text
-app/
-  domain/
-    entities/
-    value-objects/
-    repositories/
-    services/
-
-  application/
-    commands/
-    queries/
-    handlers/
-
-  infrastructure/
-    database/
-    logging/
-    notifications/
-
-  interface/
-    controllers/
-    dto/
-    presenters/
-    routes/
-    middlewares/
-
-surfaces/
-  browser/
-  mobile/
-  desktop/
-  cli/
+apps/
+  macos/SnapCal/
+  macos/SnapCalTests/
+  ios/
+  android/
+services/
+  extraction-api/
+packages/
+  event-contract/
+  benchmark/
+docs/
+  product/
+  stories/
 ```
 
-This is a thinking template, not a scaffold. Create real folders only when a
-story enters implementation and the selected stack needs them.
+Shared packages must earn their existence through at least two real consumers.
+Do not force native Swift and backend Python to share source code; share a
+versioned schema and fixtures where appropriate.
 
-## Dependency Rule
-
-Inner layers must not depend on outer layers.
-
-| Layer | May depend on | Must not depend on |
-| --- | --- | --- |
-| domain | nothing project-external except tiny pure utilities | framework, database, UI, provider, process/env |
-| application | domain | framework, UI, provider, database concrete clients |
-| infrastructure | domain, application | interface controllers or UI |
-| interface | all backend layers | UI state or platform shell assumptions |
-| app surfaces | API contracts and app-facing clients | domain internals directly |
-
-## Parse-First Boundary Rule
-
-Unknown data must be parsed at boundaries before it enters inner code.
-
-Boundaries include:
-
-- HTTP request bodies, params, and query strings.
-- Session payloads and identity claims.
-- Environment variables.
-- Database rows returned from external clients.
-- Platform shell payloads.
-- Deep links, tokens, and signed URLs.
-- Provider webhooks, events, and async payloads.
-
-Target flow:
+## Extraction Sequence
 
 ```text
-unknown input
-  -> parser
-  -> typed DTO or command
-  -> application use case
-  -> domain object/value object
+untrusted image
+  -> validation and metadata
+  -> local OCR
+  -> deterministic local candidate
+  -> normalization and deterministic consistency checks
+  -> confidence and ambiguity rules
+  -> typed draft
+  -> mandatory review
 ```
 
-Inner layers should work with meaningful product types such as `UserId`,
-`AccountId`, `WorkspaceId`, `Role`, `DateRange`, or domain-specific IDs,
-rather than repeatedly validating raw strings.
+Optional cloud OCR and a structured VLM adapter remain future infrastructure;
+they must enter through the same inward-facing OCR and extraction protocols.
 
-## Command/Query Boundary
+Models propose fields; deterministic code validates dates, timezones, reminder
+limits, and state transitions. Provider confidence is evidence, not authority.
 
-If the product has both reads and writes, keep command/query separation clear at
-the code level even when the storage layer is simple:
+## Parse-First Boundaries
 
-- Commands mutate state and own audit side effects.
-- Queries read state and format for consumers.
-- Shared domain rules live in domain/application, not controllers.
+Parse and validate all unknown data at entry:
 
-## Observability Contract
+- dropped, pasted, selected, or shared images;
+- OCR and VLM responses;
+- Google OAuth and Calendar responses;
+- Places/Geocoding candidates;
+- SQLite rows and future API payloads;
+- environment configuration and secrets;
+- mobile extension payloads and deep links.
 
-The future server should emit one canonical JSON log line per request with:
+## Persistence And Secrets
 
-- timestamp
-- level
-- request_id
-- user_id when known
-- action
-- duration_ms
-- status_code
-- message
+- SQLite stores local draft metadata first.
+- Keychain stores OAuth credentials on Apple platforms.
+- PostgreSQL is deferred until a server-owned metadata need is proven.
+- Object storage is prohibited by default and requires opt-in screenshot
+  history plus a retention/deletion design.
+- Credentials never enter source control, screenshots, traces, fixtures, or
+  application logs.
 
-Audit logs are product records. Application logs are operational records. Do not
-use one as a substitute for the other.
+## Observability
+
+Emit structured operational events with timestamp, level, request/operation ID,
+action, duration, outcome, and redacted error class. Do not log raw image data,
+full OCR text, provider prompts containing private content, or tokens. Product
+retention records and operational logs remain separate concerns.
+
+## Validation Ladder
+
+1. Pure unit tests for Vietnamese-English normalization, date/time/timezone,
+   duration, reminders, duplicate signals, and state transitions.
+2. Contract tests for provider adapters and strict payload parsing.
+3. Integration tests for local persistence and calendar failure/retry behavior.
+4. Xcode/Simulator or macOS platform tests for import, review, and UI state.
+5. Curated benchmark evaluation for extraction accuracy and latency.
+6. End-to-end proof that no calendar write occurs before user confirmation.
+
+## Decisions Required Before Implementation
+
+- Phase 2 extraction provider and server/local boundary, if local extraction is
+  not reliable enough against the benchmark.
+- Versioned event-draft schema transport.
+- Benchmark asset licensing and private-data sanitization.
+- Whether any server-owned metadata requires PostgreSQL; default is no.

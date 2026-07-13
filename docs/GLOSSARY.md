@@ -1,5 +1,36 @@
 # Glossary
 
+## SnapCal
+
+The product that converts a Vietnamese or English event screenshot into a
+reviewed Google Calendar event.
+
+## Event Draft
+
+The typed, editable proposal produced by extraction. It contains event fields,
+source metadata, evidence, confidence, ambiguity, and lifecycle state. It is not
+permission to write an external calendar event.
+
+## Critical Field
+
+Date, start time, timezone, and location when travel depends on it. Critical
+fields preserve raw evidence and surface uncertainty instead of guessing.
+
+## Evidence Text
+
+The OCR or visual text excerpt supporting an extracted field. Normalization and
+user edits do not erase the original extraction evidence.
+
+## Extraction Provider
+
+A replaceable infrastructure adapter for OCR or vision-language inference.
+Provider output is untrusted until parsed and validated.
+
+## Local-Only Mode
+
+A privacy mode in which screenshots and OCR text are not sent to cloud OCR or
+AI providers. Reduced accuracy must be explained to the user.
+
 ## Agent
 
 An AI coding collaborator operating inside the repository.

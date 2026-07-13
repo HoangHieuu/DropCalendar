@@ -1,29 +1,17 @@
-# Product Docs
+# SnapCal Product Contracts
 
-This directory is intentionally generic and mostly empty in Harness v0.
+These files are the living product surface derived from the source snapshot in
+`SPEC.md`:
 
-When a user provides a project spec, derive smaller product contract files here
-instead of keeping one large spec as the living plan. Name files by the product
-domains that actually exist in that spec, for example `overview.md`,
-`billing.md`, `workflows.md`, `permissions.md`, or `api-conventions.md`.
+- `overview.md` — product purpose, users, scope, non-goals, and invariants.
+- `extraction.md` — screenshot intake and multi-stage OCR/vision extraction.
+- `event-draft.md` — canonical data model, normalization, evidence, and
+  ambiguity policy.
+- `review-calendar.md` — mandatory review and Google Calendar mapping.
+- `privacy-quality.md` — privacy, retention, benchmarks, and quality targets.
+- `platform-roadmap.md` — platform-specific UX and phased delivery.
 
-Do not create domain files before the spec just to fill the folder. Empty
-structure is healthier than fake product truth.
-
-## Current Product Contracts
-
-No consumer-project-specific product contract is shipped in this generic
-directory. The upstream `repository-harness` product contract lives in the
-root README, Harness operating documents, versioned orchestration contract,
-story packets, and executable tests.
-
-## Update Rule
-
-When behavior changes:
-
-1. Update the affected product doc.
-2. Update or create the story packet.
-3. Update durable proof status with `scripts/bin/harness-cli story add` or
-   `scripts/bin/harness-cli story update`.
-4. Record a decision if the change affects architecture, scope, risk, or a
-   previously settled product rule.
+`SPEC.md` remains a historical source snapshot. When accepted behavior changes,
+update the relevant file here, its active story packet, and executable proof.
+Record a decision when the change affects architecture, scope, provider
+boundaries, data ownership, privacy, or a settled safety rule.
