@@ -42,6 +42,27 @@ final class CalendarEventMapperTests: XCTestCase {
         XCTAssertEqual(endExclusive, calendar.date(byAdding: .day, value: 1, to: start))
     }
 
+    func testMultiDayAllDayEndIncludesReviewedEndDate() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let start = calendar.date(from: DateComponents(year: 2026, month: 7, day: 8))!
+        let inclusiveEnd = calendar.date(from: DateComponents(year: 2026, month: 7, day: 12))!
+
+        let request = try CalendarEventMapper.request(
+            from: makeDraft(start: start, end: inclusiveEnd, isAllDay: true),
+            timeZone: timeZone,
+            calendar: calendar
+        )
+
+        guard case .allDay(_, let endExclusive, _) = request.timing else {
+            return XCTFail("Expected all-day event")
+        }
+        XCTAssertEqual(
+            endExclusive,
+            calendar.date(from: DateComponents(year: 2026, month: 7, day: 13))
+        )
+    }
+
     func testRejectsMissingTitleAndInvalidEnd() {
         var missingTitle = makeDraft(start: Date(), end: Date().addingTimeInterval(3_600))
         missingTitle.title = ExtractedField(value: nil, evidenceText: nil, confidence: 0)

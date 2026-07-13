@@ -103,6 +103,85 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertEqual(model.calendarState, .awaitingConfirmation)
     }
 
+    func testLocalOnlyNeverCallsCloudExtractor() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
+            draft: makeCloudDraft(capturedAt: capturedAt),
+            model: "gemini-2.5-flash"
+        )))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            cloudExtractor: cloud
+        )
+        model.extractionMode = .localOnly
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        let cloudCalls = await cloud.callCount()
+        XCTAssertEqual(cloudCalls, 0)
+        XCTAssertEqual(model.extractionNotice, .local)
+        XCTAssertEqual(model.phase, .review)
+    }
+
+    func testAccuracyModeUsesCloudDraft() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let cloudDraft = makeCloudDraft(capturedAt: capturedAt)
+        let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
+            draft: cloudDraft,
+            model: "gemini-2.5-flash"
+        )))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AGENTIC AI", confidence: 0.95),
+                RecognizedTextLine(text: "BUILD WEEK", confidence: 0.95),
+                RecognizedTextLine(text: "July 8 - July 12, 2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            cloudExtractor: cloud
+        )
+        model.extractionMode = .accuracy
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/poster.png"))
+
+        let cloudCalls = await cloud.callCount()
+        XCTAssertEqual(cloudCalls, 1)
+        XCTAssertEqual(model.draft.title.value, "Agentic AI Build Week")
+        XCTAssertEqual(model.extractionNotice, .gemini(model: "gemini-2.5-flash"))
+        XCTAssertEqual(model.phase, .review)
+    }
+
+    func testAccuracyModeFailureFallsBackToLocalWithVisibleAmbiguity() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let cloud = SpyCloudExtractor(result: .failure(CloudExtractionError.unavailable))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            cloudExtractor: cloud
+        )
+        model.extractionMode = .accuracy
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        let cloudCalls = await cloud.callCount()
+        XCTAssertEqual(cloudCalls, 1)
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertTrue(model.draft.ambiguities.contains { $0.field == .extraction })
+        XCTAssertEqual(
+            model.extractionNotice,
+            .localFallback(reason: "Accuracy Mode is temporarily unavailable.")
+        )
+    }
+
     private func makeValidatedImage(capturedAt: Date) throws -> ValidatedImage {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -147,6 +226,47 @@ final class SnapCalModelTests: XCTestCase {
             ambiguities: []
         )
     }
+
+    private func makeCloudDraft(capturedAt: Date) -> EventDraft {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 7, day: 8))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 7, day: 12))!
+        return EventDraft(
+            capturedAt: capturedAt,
+            sourceFileName: "poster.png",
+            detectedLanguage: .english,
+            rawOCRText: "AGENTIC AI\nBUILD WEEK\nJuly 8 - July 12, 2026",
+            title: ExtractedField(value: "Agentic AI Build Week", evidenceText: "AGENTIC AI BUILD WEEK", confidence: 0.98),
+            start: ExtractedField(value: start, evidenceText: "July 8 - July 12, 2026", confidence: 0.98),
+            end: ExtractedField(value: end, evidenceText: "July 8 - July 12, 2026", confidence: 0.98),
+            location: ExtractedField(value: "Ho Chi Minh, Vietnam", evidenceText: "Ho Chi Minh, Vietnam", confidence: 0.97),
+            description: ExtractedField(value: "5 Days (Workshops + Hackathon)", evidenceText: "5 Days (Workshops + Hackathon)", confidence: 0.94),
+            isAllDay: true,
+            ambiguities: []
+        )
+    }
+}
+
+private actor SpyCloudExtractor: CloudEventExtracting {
+    private let result: Result<CloudExtractionResult, Error>
+    private var calls = 0
+
+    init(result: Result<CloudExtractionResult, Error>) {
+        self.result = result
+    }
+
+    func extract(
+        image: ValidatedImage,
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> CloudExtractionResult {
+        calls += 1
+        return try result.get()
+    }
+
+    func callCount() -> Int { calls }
 }
 
 private actor SpyCalendarScheduler: CalendarScheduling {

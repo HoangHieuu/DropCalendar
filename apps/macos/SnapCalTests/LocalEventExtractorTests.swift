@@ -85,6 +85,43 @@ final class LocalEventExtractorTests: XCTestCase {
         XCTAssertNil(draft.location.value)
     }
 
+    func testLayoutAwarePosterBecomesAllDayDateRange() throws {
+        let extractor = LocalEventExtractor(calendar: calendar)
+        let draft = try extractor.extract(
+            lines: [
+                RecognizedTextLine(text: "GenAI Fund", confidence: 0.99, region: region(y: 0.89, height: 0.04)),
+                RecognizedTextLine(text: "AGENTIC AI", confidence: 0.98, region: region(y: 0.70, height: 0.09)),
+                RecognizedTextLine(text: "BUILD WEEK", confidence: 0.98, region: region(y: 0.59, height: 0.09)),
+                RecognizedTextLine(text: "July 8", confidence: 0.96, region: region(y: 0.43, height: 0.035)),
+                RecognizedTextLine(text: "July 12,", confidence: 0.96, region: region(y: 0.43, height: 0.035)),
+                RecognizedTextLine(text: "2026", confidence: 0.97, region: region(y: 0.39, height: 0.03)),
+                RecognizedTextLine(text: "5 Days (Workshops + Hackathon)", confidence: 0.94, region: region(y: 0.34, height: 0.03)),
+                RecognizedTextLine(text: "Ho Chi Minh, Vietnam", confidence: 0.95, region: region(y: 0.29, height: 0.03))
+            ],
+            capturedAt: makeDate(year: 2026, month: 7, day: 13, hour: 20),
+            sourceFileName: "1.jpg"
+        )
+
+        XCTAssertEqual(draft.title.value, "AGENTIC AI BUILD WEEK")
+        XCTAssertTrue(draft.isAllDay)
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: try XCTUnwrap(draft.start.value)),
+            DateComponents(year: 2026, month: 7, day: 8)
+        )
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: try XCTUnwrap(draft.end.value)),
+            DateComponents(year: 2026, month: 7, day: 12)
+        )
+        XCTAssertEqual(draft.location.value, "Ho Chi Minh, Vietnam")
+        XCTAssertTrue(draft.ambiguities.contains {
+            $0.field == .dateTime && $0.message.contains("all-day")
+        })
+    }
+
+    private func region(y: Double, height: Double) -> TextRegion {
+        TextRegion(x: 0.2, y: y, width: 0.6, height: height)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int, hour: Int) -> Date {
         calendar.date(from: DateComponents(
             timeZone: calendar.timeZone,
