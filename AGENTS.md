@@ -1,5 +1,22 @@
 # Agent Instructions
 
+This repository is SnapCal, a Vietnamese-English screenshot-to-Google-Calendar
+event creator. The Harness is the collaboration workflow; it is not product
+truth and there is no application implementation yet.
+
+Before product work, read:
+
+- `SPEC.md` as the supplied source snapshot.
+- `docs/product/README.md` and the domain file relevant to the task.
+- `docs/ARCHITECTURE.md` for current boundaries and unresolved decisions.
+- `docs/TEST_MATRIX.md` for safety and proof expectations.
+- `docs/stories/backlog.md` or the selected active story packet.
+- `docs/DEVELOPMENT_CAPABILITIES.md` before choosing an external tool.
+
+Never create a calendar event without explicit user confirmation. Treat date,
+start time, timezone, evidence retention, cloud processing, OAuth/calendar
+writes, and screenshot deletion as high-risk surfaces.
+
 <!-- HARNESS:BEGIN -->
 ## Harness
 
