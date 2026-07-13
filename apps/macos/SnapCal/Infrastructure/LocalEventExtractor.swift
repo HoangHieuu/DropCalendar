@@ -30,6 +30,11 @@ struct LocalEventExtractor: EventExtracting {
         let line: RecognizedTextLine
     }
 
+    private struct DateRangeEvidence {
+        let start: DateEvidence
+        let end: DateEvidence
+    }
+
     private var calendar: Calendar
 
     init(calendar: Calendar = .current) {
@@ -42,22 +47,34 @@ struct LocalEventExtractor: EventExtracting {
         sourceFileName: String
     ) throws -> EventDraft {
         let cleanedLines = lines
-            .map { RecognizedTextLine(text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines), confidence: $0.confidence) }
+            .map {
+                RecognizedTextLine(
+                    text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    confidence: $0.confidence,
+                    region: $0.region
+                )
+            }
             .filter { !$0.text.isEmpty }
 
-        let dateEvidence = cleanedLines.compactMap(parseDate).first
+        let explicitRange = cleanedLines.compactMap(parseDateRange).first
+        let standaloneYear = cleanedLines.compactMap(parseStandaloneYear).first
+        let dateCandidates = cleanedLines.compactMap(parseDate).map {
+            DateEvidence(
+                day: $0.day,
+                month: $0.month,
+                year: $0.year ?? standaloneYear,
+                line: $0.line
+            )
+        }
+        let dateEvidence = explicitRange?.start ?? dateCandidates.first
+        let endDateEvidence = explicitRange?.end ?? dateCandidates.dropFirst().first
         let timeEvidence = cleanedLines.compactMap(parseTime).first
         guard dateEvidence != nil || timeEvidence != nil else {
             throw DraftExtractionError.noEventDetected
         }
 
         let locationLine = cleanedLines.first(where: isLikelyLocation)
-        let titleLine = cleanedLines.first { line in
-            parseDate(line) == nil &&
-                parseTime(line) == nil &&
-                !isLikelyLocation(line) &&
-                line.text.count >= 4
-        }
+        let titleLine = selectTitle(in: cleanedLines)
 
         let rawText = cleanedLines.map(\.text).joined(separator: "\n")
         let averageConfidence = cleanedLines.isEmpty
@@ -72,11 +89,17 @@ struct LocalEventExtractor: EventExtracting {
                 severity: .high
             ))
         }
-        if dateEvidence == nil || timeEvidence == nil {
+        if dateEvidence == nil {
             ambiguities.append(DraftAmbiguity(
                 field: .dateTime,
-                message: "A complete date and start time could not be confirmed.",
+                message: "An event date could not be confirmed.",
                 severity: .high
+            ))
+        } else if timeEvidence == nil {
+            ambiguities.append(DraftAmbiguity(
+                field: .dateTime,
+                message: "No clock time was detected, so this is proposed as an all-day event.",
+                severity: .medium
             ))
         }
         if locationLine == nil {
@@ -94,24 +117,40 @@ struct LocalEventExtractor: EventExtracting {
             ))
         }
 
-        let startDate = makeStartDate(
-            dateEvidence: dateEvidence,
-            timeEvidence: timeEvidence,
-            capturedAt: capturedAt
-        )
+        let isAllDay = dateEvidence != nil && timeEvidence == nil
+        let startDate = isAllDay
+            ? makeDate(dateEvidence: dateEvidence, capturedAt: capturedAt)
+            : makeStartDate(
+                dateEvidence: dateEvidence,
+                timeEvidence: timeEvidence,
+                capturedAt: capturedAt
+            )
         let startEvidence = [dateEvidence?.line.text, timeEvidence?.line.text]
             .compactMap { $0 }
             .reduce(into: [String]()) { result, item in
                 if !result.contains(item) { result.append(item) }
             }
             .joined(separator: " • ")
-        let startConfidence = min(
-            dateEvidence?.line.confidence ?? 0,
-            timeEvidence?.line.confidence ?? 0
-        )
-        let inferredEnd = startDate.map {
-            calendar.date(byAdding: .minute, value: defaultDurationMinutes(title: titleLine?.text), to: $0)
-        } ?? nil
+        let startConfidence = timeEvidence == nil
+            ? dateEvidence?.line.confidence ?? 0
+            : min(dateEvidence?.line.confidence ?? 0, timeEvidence?.line.confidence ?? 0)
+        let endDate: Date?
+        let endEvidence: String?
+        let endConfidence: Double
+        let endIsInferred: Bool
+        if isAllDay {
+            endDate = makeDate(dateEvidence: endDateEvidence ?? dateEvidence, capturedAt: capturedAt)
+            endEvidence = (endDateEvidence ?? dateEvidence)?.line.text
+            endConfidence = (endDateEvidence ?? dateEvidence)?.line.confidence ?? 0
+            endIsInferred = endDateEvidence == nil
+        } else {
+            endDate = startDate.flatMap {
+                calendar.date(byAdding: .minute, value: defaultDurationMinutes(title: titleLine?.text), to: $0)
+            }
+            endEvidence = nil
+            endConfidence = endDate == nil ? 0 : 0.5
+            endIsInferred = endDate != nil
+        }
 
         return EventDraft(
             capturedAt: capturedAt,
@@ -130,10 +169,10 @@ struct LocalEventExtractor: EventExtracting {
                 isInferred: dateEvidence?.year == nil
             ),
             end: ExtractedField(
-                value: inferredEnd,
-                evidenceText: nil,
-                confidence: inferredEnd == nil ? 0 : 0.5,
-                isInferred: inferredEnd != nil
+                value: endDate,
+                evidenceText: endEvidence,
+                confidence: endConfidence,
+                isInferred: endIsInferred
             ),
             location: ExtractedField(
                 value: locationLine?.text,
@@ -145,8 +184,56 @@ struct LocalEventExtractor: EventExtracting {
                 evidenceText: rawText,
                 confidence: averageConfidence
             ),
+            isAllDay: isAllDay,
             ambiguities: ambiguities
         )
+    }
+
+    private func selectTitle(in lines: [RecognizedTextLine]) -> RecognizedTextLine? {
+        let candidates = lines.filter { line in
+            parseDate(line) == nil &&
+                parseTime(line) == nil &&
+                !isLikelyLocation(line) &&
+                !isMetadataLine(line) &&
+                line.text.count >= 4
+        }
+        let layoutCandidates = candidates.filter { $0.region != nil }
+        guard let maximumHeight = layoutCandidates.compactMap(\.region?.height).max(),
+              maximumHeight > 0 else {
+            return candidates.first
+        }
+
+        let prominent = layoutCandidates
+            .filter { ($0.region?.height ?? 0) >= maximumHeight * 0.62 }
+            .sorted(by: readingOrder)
+        guard let first = prominent.first else { return candidates.first }
+        let joined = prominent.map(\.text).joined(separator: " ")
+        return RecognizedTextLine(
+            text: joined,
+            confidence: prominent.map(\.confidence).min() ?? first.confidence,
+            region: first.region
+        )
+    }
+
+    private func readingOrder(_ left: RecognizedTextLine, _ right: RecognizedTextLine) -> Bool {
+        guard let leftRegion = left.region, let rightRegion = right.region else {
+            return left.text < right.text
+        }
+        let verticalDelta = (leftRegion.y + leftRegion.height) - (rightRegion.y + rightRegion.height)
+        if abs(verticalDelta) > 0.015 { return verticalDelta > 0 }
+        return leftRegion.x < rightRegion.x
+    }
+
+    private func isMetadataLine(_ line: RecognizedTextLine) -> Bool {
+        let folded = line.text.folding(
+            options: [.diacriticInsensitive, .caseInsensitive],
+            locale: Locale(identifier: "vi_VN")
+        ).lowercased()
+        let markers = [
+            "strategic partner", "enterprise partner", "tech partner", "sponsor",
+            "more partners", "announced soon"
+        ]
+        return markers.contains(where: folded.contains)
     }
 
     private func defaultDurationMinutes(title: String?) -> Int {
@@ -179,6 +266,18 @@ struct LocalEventExtractor: EventExtracting {
         components.hour = timeEvidence.hour
         components.minute = timeEvidence.minute
         return calendar.date(from: components)
+    }
+
+    private func makeDate(dateEvidence: DateEvidence?, capturedAt: Date) -> Date? {
+        guard let dateEvidence else { return nil }
+        let capturedYear = calendar.component(.year, from: capturedAt)
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = normalizedYear(dateEvidence.year) ?? capturedYear
+        components.month = dateEvidence.month
+        components.day = dateEvidence.day
+        return calendar.date(from: components).map(calendar.startOfDay(for:))
     }
 
     private func normalizedYear(_ year: Int?) -> Int? {
@@ -233,6 +332,30 @@ struct LocalEventExtractor: EventExtracting {
             )
         }
         return nil
+    }
+
+    private func parseDateRange(_ line: RecognizedTextLine) -> DateRangeEvidence? {
+        guard let groups = captures(
+            #"\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+([0-3]?\d)(?:st|nd|rd|th)?\s*(?:-|–|—|to)\s*(?:(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+)?([0-3]?\d)(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b"#,
+            in: line.text
+        ),
+        let startMonthName = groups[safe: 1] ?? nil,
+        let startMonth = monthNumber(startMonthName),
+        let startDay = integer(groups[safe: 2]),
+        let endDay = integer(groups[safe: 4]) else {
+            return nil
+        }
+        let endMonth = (groups[safe: 3] ?? nil).flatMap(monthNumber) ?? startMonth
+        let year = integer(groups[safe: 5])
+        return DateRangeEvidence(
+            start: DateEvidence(day: startDay, month: startMonth, year: year, line: line),
+            end: DateEvidence(day: endDay, month: endMonth, year: year, line: line)
+        )
+    }
+
+    private func parseStandaloneYear(_ line: RecognizedTextLine) -> Int? {
+        guard let groups = captures(#"^\s*(20\d{2})\s*$"#, in: line.text) else { return nil }
+        return integer(groups[safe: 1])
     }
 
     private func parseTime(_ line: RecognizedTextLine) -> TimeEvidence? {

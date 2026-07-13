@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ImportView: View {
+    @Binding var extractionMode: ExtractionMode
     let onChooseScreenshot: () -> Void
 
     var body: some View {
@@ -27,6 +28,24 @@ struct ImportView: View {
                     .frame(maxWidth: 620)
             }
 
+            VStack(spacing: 12) {
+                Picker("Extraction mode", selection: $extractionMode) {
+                    ForEach(ExtractionMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 420)
+                .accessibilityIdentifier("extractionModePicker")
+
+                Label(modeDisclosure, systemImage: modeIcon)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 620)
+                    .accessibilityIdentifier("extractionModeDisclosure")
+            }
+
             Button(action: onChooseScreenshot) {
                 Label("Choose Screenshot", systemImage: "photo.on.rectangle")
                     .font(.headline)
@@ -43,17 +62,40 @@ struct ImportView: View {
 
             Spacer()
 
-            Text("Local prototype — no image is uploaded, saved, or added to a calendar.")
+            Text(privacySummary)
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
                 .padding(.bottom, 24)
         }
         .padding(40)
     }
+
+    private var modeDisclosure: String {
+        switch extractionMode {
+        case .localOnly:
+            return "Uses Apple Vision on this Mac. Your image does not leave the device."
+        case .accuracy:
+            return "Sends the image and recognized text to your SnapCal service and Google Gemini for a more accurate draft."
+        }
+    }
+
+    private var modeIcon: String {
+        extractionMode == .localOnly ? "lock.shield" : "sparkles"
+    }
+
+    private var privacySummary: String {
+        switch extractionMode {
+        case .localOnly:
+            return "Local Only — no image is uploaded, saved, or added to a calendar."
+        case .accuracy:
+            return "Accuracy Mode is opt-in. The extraction service requests no provider-side storage; nothing is added to a calendar until you confirm."
+        }
+    }
 }
 
 struct ProcessingView: View {
     let fileName: String
+    let mode: ExtractionMode
 
     var body: some View {
         VStack(spacing: 20) {
@@ -64,6 +106,9 @@ struct ProcessingView: View {
             Text(fileName)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            Text(mode == .localOnly ? "Processing on this Mac" : "Using Gemini Accuracy Mode")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
         .padding(40)
         .accessibilityElement(children: .combine)

@@ -9,11 +9,16 @@ struct ContentView: View {
         Group {
             switch model.phase {
             case .ready:
-                ImportView {
+                ImportView(
+                    extractionMode: Binding(
+                        get: { model.extractionMode },
+                        set: { model.extractionMode = $0 }
+                    )
+                ) {
                     isImporterPresented = true
                 }
             case .processing(let fileName):
-                ProcessingView(fileName: fileName)
+                ProcessingView(fileName: fileName, mode: model.extractionMode)
             case .review:
                 ReviewView(model: model)
             case .failed(let issue):

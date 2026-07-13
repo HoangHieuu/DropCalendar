@@ -108,9 +108,8 @@ enum CalendarEventMapper {
             localCalendar.timeZone = timeZone
             let startDay = localCalendar.startOfDay(for: start)
             let selectedEndDay = localCalendar.startOfDay(for: end)
-            let endExclusive = selectedEndDay > startDay
-                ? selectedEndDay
-                : localCalendar.date(byAdding: .day, value: 1, to: startDay)!
+            let inclusiveEndDay = max(selectedEndDay, startDay)
+            let endExclusive = localCalendar.date(byAdding: .day, value: 1, to: inclusiveEndDay)!
             timing = .allDay(start: startDay, endExclusive: endExclusive, timeZone: timeZone)
         } else {
             timing = .timed(start: start, end: end, timeZone: timeZone)

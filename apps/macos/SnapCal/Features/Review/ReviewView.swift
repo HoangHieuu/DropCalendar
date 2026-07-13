@@ -13,6 +13,7 @@ struct ReviewView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    extractionSourcePanel
                     if !draft.ambiguities.isEmpty {
                         ambiguityPanel
                     }
@@ -41,6 +42,60 @@ struct ReviewView: View {
             }
         } message: {
             Text(confirmationSummary)
+        }
+    }
+
+    private var extractionSourcePanel: some View {
+        GroupBox {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: extractionSourceIcon)
+                    .font(.title2)
+                    .foregroundStyle(extractionSourceColor)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(extractionSourceTitle)
+                        .font(.headline)
+                    Text(extractionSourceMessage)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(8)
+        }
+        .accessibilityIdentifier("extractionSourcePanel")
+    }
+
+    private var extractionSourceTitle: String {
+        switch model.extractionNotice {
+        case .local: return "On-device extraction"
+        case .gemini: return "Gemini Accuracy Mode"
+        case .localFallback: return "Accuracy Mode fallback"
+        }
+    }
+
+    private var extractionSourceMessage: String {
+        switch model.extractionNotice {
+        case .local:
+            return "Apple Vision and SnapCal's local parser created this draft without uploading the image."
+        case .gemini(let model):
+            return "The poster and local OCR were processed by \(model). Review the evidence before creating the event."
+        case .localFallback(let reason):
+            return "Gemini was not used: \(reason) This draft came from on-device extraction."
+        }
+    }
+
+    private var extractionSourceIcon: String {
+        switch model.extractionNotice {
+        case .local: return "lock.shield"
+        case .gemini: return "sparkles"
+        case .localFallback: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var extractionSourceColor: Color {
+        switch model.extractionNotice {
+        case .local: return .green
+        case .gemini: return .blue
+        case .localFallback: return .orange
         }
     }
 

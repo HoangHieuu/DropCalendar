@@ -41,21 +41,26 @@ final class SnapCalModel {
     var draft: EventDraft = .empty
     var calendarState: CalendarCreationState = .idle
     var isGoogleConnected = false
+    var extractionMode: ExtractionMode = .localOnly
+    var extractionNotice: ExtractionNotice = .local
 
     private let validator: any ImageValidating
     private let ocrService: any OCRRecognizing
     private let extractor: any EventExtracting
+    private let cloudExtractor: any CloudEventExtracting
     private let calendarScheduler: any CalendarScheduling
 
     init(
         validator: any ImageValidating,
         ocrService: any OCRRecognizing,
         extractor: any EventExtracting,
+        cloudExtractor: any CloudEventExtracting = DisabledCloudEventExtractor(),
         calendarScheduler: any CalendarScheduling = DisabledCalendarScheduler()
     ) {
         self.validator = validator
         self.ocrService = ocrService
         self.extractor = extractor
+        self.cloudExtractor = cloudExtractor
         self.calendarScheduler = calendarScheduler
     }
 
@@ -64,6 +69,7 @@ final class SnapCalModel {
             validator: ImageValidator(),
             ocrService: VisionOCRService(),
             extractor: LocalEventExtractor(),
+            cloudExtractor: GeminiExtractionClient.live(),
             calendarScheduler: GoogleCalendarScheduler.live()
         )
     }
@@ -90,11 +96,45 @@ final class SnapCalModel {
         do {
             let image = try validator.validate(url)
             let lines = try await ocrService.recognizeText(in: image.cgImage)
-            draft = try extractor.extract(
-                lines: lines,
-                capturedAt: image.capturedAt,
-                sourceFileName: image.fileName
-            )
+            switch extractionMode {
+            case .localOnly:
+                draft = try extractor.extract(
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                extractionNotice = .local
+            case .accuracy:
+                let localCandidate = try? extractor.extract(
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                do {
+                    let result = try await cloudExtractor.extract(
+                        image: image,
+                        lines: lines,
+                        capturedAt: image.capturedAt,
+                        sourceFileName: image.fileName
+                    )
+                    draft = reconcile(cloud: result.draft, local: localCandidate)
+                    extractionNotice = .gemini(model: result.model)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    guard var localCandidate else { throw error }
+                    localCandidate.ambiguities.append(DraftAmbiguity(
+                        field: .extraction,
+                        message: "Accuracy Mode was unavailable. This draft uses on-device extraction only.",
+                        severity: .medium
+                    ))
+                    draft = localCandidate
+                    extractionNotice = .localFallback(
+                        reason: (error as? LocalizedError)?.errorDescription
+                            ?? "Accuracy Mode was unavailable."
+                    )
+                }
+            }
             calendarState = .idle
             phase = .review
         } catch is CancellationError {
@@ -111,6 +151,7 @@ final class SnapCalModel {
     func startOver() {
         draft = .empty
         calendarState = .idle
+        extractionNotice = .local
         phase = .ready
     }
 
@@ -171,5 +212,42 @@ final class SnapCalModel {
 
     private var isDraftValid: Bool {
         (try? CalendarEventMapper.request(from: draft)) != nil
+    }
+
+    private func reconcile(cloud: EventDraft, local: EventDraft?) -> EventDraft {
+        guard let local else { return cloud }
+        var result = cloud
+
+        if let cloudStart = cloud.start.value,
+           let localStart = local.start.value,
+           !Calendar.current.isDate(cloudStart, inSameDayAs: localStart) {
+            result.ambiguities.append(DraftAmbiguity(
+                field: .dateTime,
+                message: "Gemini and on-device extraction found different dates. Verify the poster before creating the event.",
+                severity: .high
+            ))
+            result.start.confidence = min(result.start.confidence, 0.49)
+        }
+
+        if let cloudLocation = cloud.location.value,
+           let localLocation = local.location.value,
+           normalized(cloudLocation) != normalized(localLocation) {
+            result.ambiguities.append(DraftAmbiguity(
+                field: .location,
+                message: "Gemini and on-device extraction found different locations. Review the location.",
+                severity: .medium
+            ))
+            result.location.confidence = min(result.location.confidence, 0.69)
+        }
+        return result
+    }
+
+    private func normalized(_ value: String) -> String {
+        value.folding(
+            options: [.diacriticInsensitive, .caseInsensitive],
+            locale: Locale(identifier: "vi_VN")
+        )
+        .lowercased()
+        .filter(\.isLetter)
     }
 }

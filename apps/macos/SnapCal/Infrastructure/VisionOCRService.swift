@@ -2,9 +2,23 @@ import CoreGraphics
 import Foundation
 import Vision
 
-struct RecognizedTextLine: Equatable {
+struct TextRegion: Codable, Equatable, Sendable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+}
+
+struct RecognizedTextLine: Equatable, Sendable {
     let text: String
     let confidence: Double
+    let region: TextRegion?
+
+    init(text: String, confidence: Double, region: TextRegion? = nil) {
+        self.text = text
+        self.confidence = confidence
+        self.region = region
+    }
 }
 
 protocol OCRRecognizing {
@@ -60,7 +74,13 @@ struct VisionOCRService: OCRRecognizing {
                         guard !text.isEmpty else { return nil }
                         return RecognizedTextLine(
                             text: text,
-                            confidence: Double(candidate.confidence)
+                            confidence: Double(candidate.confidence),
+                            region: TextRegion(
+                                x: observation.boundingBox.minX,
+                                y: observation.boundingBox.minY,
+                                width: observation.boundingBox.width,
+                                height: observation.boundingBox.height
+                            )
                         )
                     }
 
