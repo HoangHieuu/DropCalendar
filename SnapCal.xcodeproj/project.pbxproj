@@ -1,0 +1,183 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* SnapCalApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000001 /* SnapCalApp.swift */; };
+		B00000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* ContentView.swift */; };
+		B00000000000000000000003 /* SnapCalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* SnapCalModel.swift */; };
+		B00000000000000000000004 /* EventDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* EventDraft.swift */; };
+		B00000000000000000000005 /* ImageValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* ImageValidator.swift */; };
+		B00000000000000000000006 /* VisionOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000006 /* VisionOCRService.swift */; };
+		B00000000000000000000007 /* LocalEventExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* LocalEventExtractor.swift */; };
+		B00000000000000000000008 /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000008 /* ImportView.swift */; };
+		B00000000000000000000009 /* ReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000009 /* ReviewView.swift */; };
+		B0000000000000000000000A /* ImageValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A /* ImageValidatorTests.swift */; };
+		B0000000000000000000000B /* LocalEventExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* LocalEventExtractorTests.swift */; };
+		B0000000000000000000000C /* SnapCalModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* SnapCalModelTests.swift */; };
+		B00000000000000000000010 /* CalendarEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000010 /* CalendarEvent.swift */; };
+		B00000000000000000000011 /* HTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000011 /* HTTPTransport.swift */; };
+		B00000000000000000000012 /* KeychainCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000012 /* KeychainCredentialStore.swift */; };
+		B00000000000000000000013 /* LoopbackOAuthServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* LoopbackOAuthServer.swift */; };
+		B00000000000000000000014 /* GoogleOAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* GoogleOAuthService.swift */; };
+		B00000000000000000000015 /* GoogleCalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000015 /* GoogleCalendarService.swift */; };
+		B00000000000000000000016 /* CalendarEventMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000016 /* CalendarEventMapperTests.swift */; };
+		B00000000000000000000017 /* GoogleOAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000017 /* GoogleOAuthTests.swift */; };
+		B00000000000000000000018 /* GoogleCalendarClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000018 /* GoogleCalendarClientTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = P00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = T00000000000000000000001;
+			remoteInfo = SnapCal;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		F00000000000000000000001 /* SnapCalApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalApp.swift; sourceTree = "<group>"; };
+		F00000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F00000000000000000000003 /* SnapCalModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalModel.swift; sourceTree = "<group>"; };
+		F00000000000000000000004 /* EventDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDraft.swift; sourceTree = "<group>"; };
+		F00000000000000000000005 /* ImageValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageValidator.swift; sourceTree = "<group>"; };
+		F00000000000000000000006 /* VisionOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRService.swift; sourceTree = "<group>"; };
+		F00000000000000000000007 /* LocalEventExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEventExtractor.swift; sourceTree = "<group>"; };
+		F00000000000000000000008 /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportView.swift; sourceTree = "<group>"; };
+		F00000000000000000000009 /* ReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
+		F0000000000000000000000A /* ImageValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageValidatorTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000000B /* LocalEventExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEventExtractorTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000000C /* SnapCalModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalModelTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000000D /* SnapCal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SnapCal.entitlements; sourceTree = "<group>"; };
+		F0000000000000000000000E /* SnapCal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SnapCal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000000F /* SnapCalTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SnapCalTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F00000000000000000000010 /* CalendarEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEvent.swift; sourceTree = "<group>"; };
+		F00000000000000000000011 /* HTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPTransport.swift; sourceTree = "<group>"; };
+		F00000000000000000000012 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialStore.swift; sourceTree = "<group>"; };
+		F00000000000000000000013 /* LoopbackOAuthServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackOAuthServer.swift; sourceTree = "<group>"; };
+		F00000000000000000000014 /* GoogleOAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthService.swift; sourceTree = "<group>"; };
+		F00000000000000000000015 /* GoogleCalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarService.swift; sourceTree = "<group>"; };
+		F00000000000000000000016 /* CalendarEventMapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventMapperTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000017 /* GoogleOAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000018 /* GoogleCalendarClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarClientTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		W00000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		W00000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G00000000000000000000000 = {
+			isa = PBXGroup;
+			children = (
+				G00000000000000000000001 /* SnapCal */,
+				G00000000000000000000008 /* SnapCalTests */,
+				G00000000000000000000009 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G00000000000000000000001 /* SnapCal */ = {
+			isa = PBXGroup;
+			children = (G00000000000000000000002, G00000000000000000000003, G00000000000000000000004, G00000000000000000000005, G00000000000000000000006, F0000000000000000000000D);
+			name = SnapCal;
+			path = apps/macos/SnapCal;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000002 /* App */ = {isa = PBXGroup; children = (F00000000000000000000001, F00000000000000000000002); path = App; sourceTree = "<group>"; };
+		G00000000000000000000003 /* Application */ = {isa = PBXGroup; children = (F00000000000000000000003); path = Application; sourceTree = "<group>"; };
+		G00000000000000000000004 /* Domain */ = {isa = PBXGroup; children = (F00000000000000000000004, F00000000000000000000010); path = Domain; sourceTree = "<group>"; };
+		G00000000000000000000005 /* Infrastructure */ = {isa = PBXGroup; children = (F00000000000000000000005, F00000000000000000000006, F00000000000000000000007, F00000000000000000000011, F00000000000000000000012, F00000000000000000000013, F00000000000000000000014, F00000000000000000000015); path = Infrastructure; sourceTree = "<group>"; };
+		G00000000000000000000006 /* Features */ = {isa = PBXGroup; children = (G0000000000000000000000A, G0000000000000000000000B); path = Features; sourceTree = "<group>"; };
+		G0000000000000000000000A /* Import */ = {isa = PBXGroup; children = (F00000000000000000000008); path = Import; sourceTree = "<group>"; };
+		G0000000000000000000000B /* Review */ = {isa = PBXGroup; children = (F00000000000000000000009); path = Review; sourceTree = "<group>"; };
+		G00000000000000000000008 /* SnapCalTests */ = {isa = PBXGroup; children = (F0000000000000000000000A, F0000000000000000000000B, F0000000000000000000000C, F00000000000000000000016, F00000000000000000000017, F00000000000000000000018); path = apps/macos/SnapCalTests; sourceTree = "<group>"; };
+		G00000000000000000000009 /* Products */ = {isa = PBXGroup; children = (F0000000000000000000000E, F0000000000000000000000F); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		T00000000000000000000001 /* SnapCal */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L00000000000000000000002;
+			buildPhases = (S00000000000000000000001, W00000000000000000000001, R00000000000000000000001);
+			buildRules = ();
+			dependencies = ();
+			name = SnapCal;
+			productName = SnapCal;
+			productReference = F0000000000000000000000E;
+			productType = "com.apple.product-type.application";
+		};
+		T00000000000000000000002 /* SnapCalTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L00000000000000000000003;
+			buildPhases = (S00000000000000000000002, W00000000000000000000002, R00000000000000000000002);
+			buildRules = ();
+			dependencies = (D00000000000000000000001);
+			name = SnapCalTests;
+			productName = SnapCalTests;
+			productReference = F0000000000000000000000F;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		P00000000000000000000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					T00000000000000000000001 = {CreatedOnToolsVersion = 16.4;};
+					T00000000000000000000002 = {CreatedOnToolsVersion = 16.4; TestTargetID = T00000000000000000000001;};
+				};
+			};
+			buildConfigurationList = L00000000000000000000001;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = G00000000000000000000000;
+			productRefGroup = G00000000000000000000009;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (T00000000000000000000001, T00000000000000000000002);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		R00000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		R00000000000000000000002 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		S00000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015); runOnlyForDeploymentPostprocessing = 0; };
+		S00000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C, B00000000000000000000016, B00000000000000000000017, B00000000000000000000018); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D00000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = T00000000000000000000001; targetProxy = C00000000000000000000001; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C00000000000000000000100 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_OPTIMIZATION_LEVEL = 0; MACOSX_DEPLOYMENT_TARGET = 14.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+		C00000000000000000000101 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; VALIDATE_PRODUCT = YES; }; name = Release; };
+		C00000000000000000000200 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = apps/macos/SnapCal/SnapCal.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = SnapCal; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity"; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; }; name = Debug; };
+		C00000000000000000000201 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = apps/macos/SnapCal/SnapCal.entitlements; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_APP_SANDBOX = YES; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = SnapCal; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity"; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; }; name = Release; };
+		C00000000000000000000300 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SnapCal.app/Contents/MacOS/SnapCal"; }; name = Debug; };
+		C00000000000000000000301 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SnapCal.app/Contents/MacOS/SnapCal"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		L00000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000100, C00000000000000000000101); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		L00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000200, C00000000000000000000201); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		L00000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (C00000000000000000000300, C00000000000000000000301); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = P00000000000000000000000 /* Project object */;
+}
