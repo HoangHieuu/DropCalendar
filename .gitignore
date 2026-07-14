@@ -12,6 +12,8 @@ dist/
 
 # Local Xcode build products and derived data.
 .build/
+xcuserdata/
+*.xcuserstate
 .venv/
 .env
 services/extraction-api/.env

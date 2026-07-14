@@ -149,6 +149,6 @@ class ExtractionResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    provider: Literal["gemini"] = "gemini"
+    provider: Literal["openrouter"] = "openrouter"
     model: str
     ready: bool

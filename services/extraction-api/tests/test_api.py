@@ -76,7 +76,7 @@ def valid_proposal() -> EventProposal:
 @dataclass
 class FakeProvider:
     proposal: EventProposal
-    model: str = "gemini-2.5-flash"
+    model: str = "google/gemini-3.1-flash-lite"
     ready: bool = True
     received: ExtractionRequest | None = None
 
@@ -88,7 +88,7 @@ class FakeProvider:
 @dataclass
 class FailingProvider:
     error: Exception
-    model: str = "gemini-2.5-flash"
+    model: str = "google/gemini-3.1-flash-lite"
     ready: bool = True
 
     async def extract(self, request: ExtractionRequest) -> EventProposal:
@@ -102,8 +102,8 @@ def test_health_discloses_readiness_without_credentials() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "status": "ok",
-        "provider": "gemini",
-        "model": "gemini-2.5-flash",
+        "provider": "openrouter",
+        "model": "google/gemini-3.1-flash-lite",
         "ready": True,
     }
 

@@ -1,34 +1,46 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
 
 from .contracts import ExtractionRequest, ExtractionResponse, HealthResponse
 from .provider import (
     ExtractionProvider,
-    GeminiProvider,
     InvalidProviderOutputError,
+    OpenRouterProvider,
     ProviderRejectedError,
     ProviderUnavailableError,
-    UnavailableGeminiProvider,
+    UnavailableOpenRouterProvider,
 )
 
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+ROOT_DIRECTORY = Path(__file__).resolve().parents[3]
+load_dotenv(ROOT_DIRECTORY / ".env", override=False)
+
+DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 def configured_provider() -> ExtractionProvider:
-    model = os.environ.get("SNAPCAL_GEMINI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    model = os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
-        return UnavailableGeminiProvider(model=model)
+        return UnavailableOpenRouterProvider(model=model)
     try:
-        return GeminiProvider(api_key=api_key, model=model)
+        return OpenRouterProvider(
+            api_key=api_key,
+            model=model,
+            base_url=os.environ.get("OPENROUTER_BASE_URL", DEFAULT_BASE_URL),
+            http_referer=os.environ.get("OPENROUTER_HTTP_REFERER"),
+            app_name=os.environ.get("OPENROUTER_APP_NAME", "SnapCal"),
+        )
     except ProviderUnavailableError:
-        return UnavailableGeminiProvider(model=model)
+        return UnavailableOpenRouterProvider(model=model)
 
 
 def create_app(provider: ExtractionProvider | None = None) -> FastAPI:
@@ -50,20 +62,20 @@ def create_app(provider: ExtractionProvider | None = None) -> FastAPI:
         try:
             event = await selected_provider.extract(request)
             return ExtractionResponse(model=selected_provider.model, event=event)
-        except ProviderUnavailableError as error:
+        except ProviderUnavailableError:
             raise HTTPException(
                 status_code=503,
-                detail={"code": "provider_unavailable", "message": str(error)},
+                detail={"code": "provider_unavailable", "message": "OpenRouter is unavailable."},
             ) from None
         except ProviderRejectedError:
             raise HTTPException(
                 status_code=502,
-                detail={"code": "provider_rejected", "message": "Gemini could not process this image."},
+                detail={"code": "provider_rejected", "message": "OpenRouter could not process this image."},
             ) from None
         except InvalidProviderOutputError:
             raise HTTPException(
                 status_code=502,
-                detail={"code": "invalid_provider_output", "message": "Gemini returned an invalid event proposal."},
+                detail={"code": "invalid_provider_output", "message": "OpenRouter returned an invalid event proposal."},
             ) from None
 
     @app.exception_handler(ValueError)

@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [[ -z "${GEMINI_API_KEY:-}" ]]; then
-  echo "GEMINI_API_KEY is not set. Export a dedicated Gemini authorization key first." >&2
+if [[ -z "${OPENROUTER_API_KEY:-}" && ! -f .env ]]; then
+  echo "OPENROUTER_API_KEY is not set. Copy .env.example to .env and add your OpenRouter key." >&2
   exit 1
 fi
 
