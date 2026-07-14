@@ -55,7 +55,7 @@ final class GoogleOAuthTests: XCTestCase {
         let configuration = GoogleOAuthConfiguration(
             clientID: "desktop-client-id",
             authorizationEndpoint: URL(string: "https://accounts.example.test/auth")!,
-            tokenEndpoint: tokenEndpoint,
+            tokenBrokerEndpoint: tokenEndpoint,
             scope: "calendar.events.owned"
         )
         let store = InMemoryCredentialStore(refreshToken: "stored-refresh-token")
@@ -78,13 +78,74 @@ final class GoogleOAuthTests: XCTestCase {
         let token = try await service.validAccessToken()
         let recordedRequest = await transport.capturedRequest()
         let request = try XCTUnwrap(recordedRequest)
-        let body = String(data: try XCTUnwrap(request.httpBody), encoding: .utf8)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Any]
+        )
 
         XCTAssertEqual(token, "new-access-token")
         XCTAssertEqual(request.url, tokenEndpoint)
-        XCTAssertTrue(body?.contains("refresh_token=stored-refresh-token") == true)
-        XCTAssertTrue(body?.contains("client_id=desktop-client-id") == true)
-        XCTAssertFalse(body?.contains("client_secret") == true)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json; charset=utf-8")
+        XCTAssertEqual(json["refresh_token"] as? String, "stored-refresh-token")
+        XCTAssertEqual(json["client_id"] as? String, "desktop-client-id")
+        XCTAssertNil(json["client_secret"])
+    }
+
+    func testInteractiveAccessTokenSurvivesRefreshTokenPersistenceFailure() async {
+        let tokenEndpoint = URL(string: "http://127.0.0.1:8765/v1/google-oauth/token")!
+        let service = GoogleOAuthService(
+            configuration: GoogleOAuthConfiguration(
+                clientID: "desktop-client-id",
+                authorizationEndpoint: URL(string: "https://accounts.example.test/auth")!,
+                tokenBrokerEndpoint: tokenEndpoint,
+                scope: "calendar.events.owned"
+            ),
+            credentialStore: FailingSaveCredentialStore()
+        )
+
+        let token = await service.acceptInteractiveTokenResponse(OAuthTokenResponse(
+            accessToken: "current-access-token",
+            expiresIn: 3_600,
+            refreshToken: "refresh-token-that-cannot-be-saved"
+        ))
+
+        XCTAssertEqual(token, "current-access-token")
+        let hasStoredAuthorization = await service.hasStoredAuthorization()
+        XCTAssertFalse(hasStoredAuthorization)
+    }
+
+    func testUnavailableBrokerPreservesStoredRefreshToken() async throws {
+        let tokenEndpoint = URL(string: "http://127.0.0.1:8765/v1/google-oauth/token")!
+        let store = InMemoryCredentialStore(refreshToken: "stored-refresh-token")
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: tokenEndpoint,
+            statusCode: 503,
+            httpVersion: nil,
+            headerFields: nil
+        ))
+        let transport = OAuthRecordingTransport(
+            data: Data(#"{"detail":{"code":"oauth_broker_unavailable"}}"#.utf8),
+            response: response
+        )
+        let service = GoogleOAuthService(
+            configuration: GoogleOAuthConfiguration(
+                clientID: "desktop-client-id",
+                authorizationEndpoint: URL(string: "https://accounts.example.test/auth")!,
+                tokenBrokerEndpoint: tokenEndpoint,
+                scope: "calendar.events.owned"
+            ),
+            credentialStore: store,
+            transport: transport
+        )
+
+        do {
+            _ = try await service.validAccessToken()
+            XCTFail("Expected an unavailable broker error")
+        } catch {
+            XCTAssertEqual(error as? GoogleCalendarError, .oauthBrokerUnavailable)
+        }
+        let refreshToken = try await store.readRefreshToken()
+        XCTAssertEqual(refreshToken, "stored-refresh-token")
     }
 }
 
@@ -116,4 +177,12 @@ private actor OAuthRecordingTransport: HTTPTransport {
     }
 
     func capturedRequest() -> URLRequest? { request }
+}
+
+private actor FailingSaveCredentialStore: OAuthCredentialStoring {
+    func readRefreshToken() async throws -> String? { nil }
+    func saveRefreshToken(_ token: String) async throws {
+        throw GoogleCalendarError.keychainFailure
+    }
+    func deleteRefreshToken() async throws { }
 }

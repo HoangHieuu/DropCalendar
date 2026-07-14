@@ -6,13 +6,13 @@ import Security
 struct GoogleOAuthConfiguration: Sendable {
     let clientID: String
     let authorizationEndpoint: URL
-    let tokenEndpoint: URL
+    let tokenBrokerEndpoint: URL
     let scope: String
 
     static let live = GoogleOAuthConfiguration(
         clientID: "837353414684-80cr1usgvcr0p85u908d3q51uml9ul5u.apps.googleusercontent.com",
         authorizationEndpoint: URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!,
-        tokenEndpoint: URL(string: "https://oauth2.googleapis.com/token")!,
+        tokenBrokerEndpoint: URL(string: "http://127.0.0.1:8765/v1/google-oauth/token")!,
         scope: "https://www.googleapis.com/auth/calendar.events.owned"
     )
 }
@@ -23,6 +23,18 @@ struct OAuthAccessToken: Equatable, Sendable {
 
     func isUsable(at date: Date = Date()) -> Bool {
         expiresAt.timeIntervalSince(date) > 60
+    }
+}
+
+struct OAuthTokenResponse: Decodable, Equatable, Sendable {
+    let accessToken: String
+    let expiresIn: Double
+    let refreshToken: String?
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case expiresIn = "expires_in"
+        case refreshToken = "refresh_token"
     }
 }
 
@@ -72,16 +84,30 @@ enum OAuthCallbackParser {
 }
 
 actor GoogleOAuthService {
-    private struct TokenResponse: Decodable {
-        let accessToken: String
-        let expiresIn: Double
+    private struct TokenBrokerRequest: Encodable {
+        let clientID: String
+        let grantType: String
+        let code: String?
+        let codeVerifier: String?
+        let redirectURI: String?
         let refreshToken: String?
 
         enum CodingKeys: String, CodingKey {
-            case accessToken = "access_token"
-            case expiresIn = "expires_in"
+            case clientID = "client_id"
+            case grantType = "grant_type"
+            case code
+            case codeVerifier = "code_verifier"
+            case redirectURI = "redirect_uri"
             case refreshToken = "refresh_token"
         }
+    }
+
+    private struct TokenBrokerErrorResponse: Decodable {
+        struct Detail: Decodable {
+            let code: String
+        }
+
+        let detail: Detail
     }
 
     private let configuration: GoogleOAuthConfiguration
@@ -110,9 +136,11 @@ actor GoogleOAuthService {
         if let refreshToken = try await credentialStore.readRefreshToken() {
             do {
                 return try await refreshAccessToken(using: refreshToken)
-            } catch {
+            } catch GoogleCalendarError.tokenExchangeFailed {
                 try? await credentialStore.deleteRefreshToken()
                 accessToken = nil
+            } catch {
+                throw error
             }
         }
         return try await authorizeInteractively()
@@ -149,12 +177,7 @@ actor GoogleOAuthService {
             verifier: verifier,
             redirectURI: redirectURI
         )
-        if let refreshToken = tokenResponse.refreshToken, !refreshToken.isEmpty {
-            try await credentialStore.saveRefreshToken(refreshToken)
-        } else if try await credentialStore.readRefreshToken() == nil {
-            throw GoogleCalendarError.tokenExchangeFailed
-        }
-        return cache(tokenResponse)
+        return await acceptInteractiveTokenResponse(tokenResponse)
     }
 
     private func waitForCallback(from server: LoopbackOAuthServer) async throws -> URL {
@@ -175,12 +198,14 @@ actor GoogleOAuthService {
     }
 
     private func refreshAccessToken(using refreshToken: String) async throws -> String {
-        let request = try tokenRequest(parameters: [
-            "client_id": configuration.clientID,
-            "refresh_token": refreshToken,
-            "grant_type": "refresh_token"
-        ])
-        let tokenResponse = try await performTokenRequest(request)
+        let tokenResponse = try await performTokenRequest(TokenBrokerRequest(
+            clientID: configuration.clientID,
+            grantType: "refresh_token",
+            code: nil,
+            codeVerifier: nil,
+            redirectURI: nil,
+            refreshToken: refreshToken
+        ))
         return cache(tokenResponse)
     }
 
@@ -188,21 +213,42 @@ actor GoogleOAuthService {
         _ code: String,
         verifier: String,
         redirectURI: URL
-    ) async throws -> TokenResponse {
-        let request = try tokenRequest(parameters: [
-            "client_id": configuration.clientID,
-            "code": code,
-            "code_verifier": verifier,
-            "grant_type": "authorization_code",
-            "redirect_uri": redirectURI.absoluteString
-        ])
-        return try await performTokenRequest(request)
+    ) async throws -> OAuthTokenResponse {
+        try await performTokenRequest(TokenBrokerRequest(
+            clientID: configuration.clientID,
+            grantType: "authorization_code",
+            code: code,
+            codeVerifier: verifier,
+            redirectURI: redirectURI.absoluteString,
+            refreshToken: nil
+        ))
     }
 
-    private func performTokenRequest(_ request: URLRequest) async throws -> TokenResponse {
-        let (data, response) = try await transport.data(for: request)
-        guard response.statusCode == 200,
-              let decoded = try? JSONDecoder().decode(TokenResponse.self, from: data),
+    private func performTokenRequest(_ payload: TokenBrokerRequest) async throws -> OAuthTokenResponse {
+        var request = URLRequest(url: configuration.tokenBrokerEndpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let data: Data
+        let response: HTTPURLResponse
+        do {
+            (data, response) = try await transport.data(for: request)
+        } catch {
+            throw GoogleCalendarError.oauthBrokerUnavailable
+        }
+
+        guard response.statusCode == 200 else {
+            let code = try? JSONDecoder().decode(TokenBrokerErrorResponse.self, from: data).detail.code
+            if code == "oauth_client_mismatch" {
+                throw GoogleCalendarError.oauthCredentialMismatch
+            }
+            if response.statusCode == 503 || code == "oauth_broker_unavailable" {
+                throw GoogleCalendarError.oauthBrokerUnavailable
+            }
+            throw GoogleCalendarError.tokenExchangeFailed
+        }
+        guard let decoded = try? JSONDecoder().decode(OAuthTokenResponse.self, from: data),
               !decoded.accessToken.isEmpty,
               decoded.expiresIn > 0 else {
             throw GoogleCalendarError.tokenExchangeFailed
@@ -210,7 +256,15 @@ actor GoogleOAuthService {
         return decoded
     }
 
-    private func cache(_ response: TokenResponse) -> String {
+    func acceptInteractiveTokenResponse(_ response: OAuthTokenResponse) async -> String {
+        let token = cache(response)
+        if let refreshToken = response.refreshToken, !refreshToken.isEmpty {
+            try? await credentialStore.saveRefreshToken(refreshToken)
+        }
+        return token
+    }
+
+    private func cache(_ response: OAuthTokenResponse) -> String {
         let token = OAuthAccessToken(
             value: response.accessToken,
             expiresAt: Date().addingTimeInterval(response.expiresIn)
@@ -247,18 +301,4 @@ actor GoogleOAuthService {
         return url
     }
 
-    private func tokenRequest(parameters: [String: String]) throws -> URLRequest {
-        var components = URLComponents()
-        components.queryItems = parameters.sorted(by: { $0.key < $1.key }).map {
-            URLQueryItem(name: $0.key, value: $0.value)
-        }
-        guard let body = components.percentEncodedQuery?.data(using: .utf8) else {
-            throw GoogleCalendarError.invalidConfiguration
-        }
-        var request = URLRequest(url: configuration.tokenEndpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        return request
-    }
 }

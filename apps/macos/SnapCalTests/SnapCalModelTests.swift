@@ -26,6 +26,28 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertTrue(model.draft.requiresUserConfirmation)
     }
 
+    func testNotchDropImporterFeedsExistingReviewFlow() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor()
+        )
+        let selection = NotchDropSelection(
+            url: URL(fileURLWithPath: "/tmp/notch-workshop.png"),
+            ignoredItemCount: 0
+        )
+
+        await NotchDropImporter(model: model).importSelection(selection)
+
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draft.title.value, "AI Workshop")
+        XCTAssertTrue(model.draft.requiresUserConfirmation)
+    }
+
     func testValidationFailureIsRecoverable() async {
         let model = SnapCalModel(
             validator: FailingValidator(),

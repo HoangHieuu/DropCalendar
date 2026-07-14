@@ -34,6 +34,15 @@ struct CalendarCreationIssue: Equatable {
         case GoogleCalendarError.authorizationTimedOut:
             title = "Google connection timed out"
             message = "Your draft is unchanged. Review and confirm again when you are ready to sign in."
+        case GoogleCalendarError.oauthBrokerUnavailable:
+            title = "Google connection helper is unavailable"
+            message = "Start SnapCal's local service and configure its Google OAuth credential file, then review and confirm again."
+        case GoogleCalendarError.oauthCredentialMismatch:
+            title = "Google OAuth setup does not match"
+            message = "The local service is using a different Google OAuth client. Check GOOGLE_OAUTH_CREDENTIALS_FILE, then try again."
+        case GoogleCalendarError.tokenExchangeFailed:
+            title = "Google sign-in could not finish"
+            message = "Google rejected the connection after sign-in. Your draft is preserved; review and confirm again."
         case GoogleCalendarError.invalidDraft(let reason):
             title = "Review required"
             message = reason
@@ -59,6 +68,8 @@ enum GoogleCalendarError: Error, Equatable {
     case authorizationCancelled
     case authorizationDenied
     case authorizationTimedOut
+    case oauthBrokerUnavailable
+    case oauthCredentialMismatch
     case invalidAuthorizationResponse
     case stateMismatch
     case tokenExchangeFailed

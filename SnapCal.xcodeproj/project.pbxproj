@@ -31,6 +31,8 @@
 		B00000000000000000000019 /* ExtractionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000019 /* ExtractionMode.swift */; };
 		B0000000000000000000001A /* GeminiExtractionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001A /* GeminiExtractionClient.swift */; };
 		B0000000000000000000001B /* GeminiExtractionClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001B /* GeminiExtractionClientTests.swift */; };
+		B0000000000000000000001C /* NotchDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001C /* NotchDropZone.swift */; };
+		B0000000000000000000001D /* NotchDropZoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001D /* NotchDropZoneTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +73,8 @@
 		F00000000000000000000019 /* ExtractionMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtractionMode.swift; sourceTree = "<group>"; };
 		F0000000000000000000001A /* GeminiExtractionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiExtractionClient.swift; sourceTree = "<group>"; };
 		F0000000000000000000001B /* GeminiExtractionClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiExtractionClientTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000001C /* NotchDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDropZone.swift; sourceTree = "<group>"; };
+		F0000000000000000000001D /* NotchDropZoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDropZoneTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -161,6 +165,7 @@
 			isa = PBXGroup;
 			children = (
 				G0000000000000000000000A /* Import */,
+				G0000000000000000000000C /* Notch */,
 				G0000000000000000000000B /* Review */,
 			);
 			path = Features;
@@ -176,6 +181,7 @@
 				F00000000000000000000017 /* GoogleOAuthTests.swift */,
 				F00000000000000000000018 /* GoogleCalendarClientTests.swift */,
 				F0000000000000000000001B /* GeminiExtractionClientTests.swift */,
+				F0000000000000000000001D /* NotchDropZoneTests.swift */,
 			);
 			path = apps/macos/SnapCalTests;
 			sourceTree = "<group>";
@@ -203,6 +209,14 @@
 				F00000000000000000000009 /* ReviewView.swift */,
 			);
 			path = Review;
+			sourceTree = "<group>";
+		};
+		G0000000000000000000000C /* Notch */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000001C /* NotchDropZone.swift */,
+			);
+			path = Notch;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -320,6 +334,7 @@
 				B00000000000000000000015 /* GoogleCalendarService.swift in Sources */,
 				B00000000000000000000019 /* ExtractionMode.swift in Sources */,
 				B0000000000000000000001A /* GeminiExtractionClient.swift in Sources */,
+				B0000000000000000000001C /* NotchDropZone.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -334,6 +349,7 @@
 				B00000000000000000000017 /* GoogleOAuthTests.swift in Sources */,
 				B00000000000000000000018 /* GoogleCalendarClientTests.swift in Sources */,
 				B0000000000000000000001B /* GeminiExtractionClientTests.swift in Sources */,
+				B0000000000000000000001D /* NotchDropZoneTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

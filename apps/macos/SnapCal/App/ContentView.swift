@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @State private var model = SnapCalModel.live()
+    @Bindable var model: SnapCalModel
     @State private var isImporterPresented = false
 
     var body: some View {
@@ -60,6 +60,6 @@ struct ContentView: View {
 }
 
 #Preview("Import") {
-    ContentView()
+    ContentView(model: SnapCalModel.live())
         .frame(width: 920, height: 680)
 }
