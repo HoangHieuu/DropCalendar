@@ -65,6 +65,132 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertEqual(model.phase, .ready)
     }
 
+    func testClipboardImportUsesExistingReviewFlowWithoutCalendarWrite() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let validatedImage = try makeValidatedImage(capturedAt: capturedAt)
+        let clipboardImage = ClipboardImage(
+            data: Data([0x89, 0x50, 0x4E, 0x47]),
+            fileName: "Clipboard Screenshot.png",
+            capturedAt: capturedAt
+        )
+        let scheduler = SpyCalendarScheduler()
+        let model = SnapCalModel(
+            validator: StubValidator(image: validatedImage),
+            clipboardReader: StubClipboardReader(image: clipboardImage),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler
+        )
+
+        await model.importClipboardImage()
+
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draft.title.value, "AI Workshop")
+        XCTAssertEqual(model.draft.sourceFileName, "workshop.png")
+        let calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
+    }
+
+    func testMissingClipboardImageIsRecoverableAndDoesNotStartOCR() async {
+        let ocr = SpyOCR()
+        let model = SnapCalModel(
+            validator: FailingValidator(),
+            clipboardReader: MissingClipboardReader(),
+            ocrService: ocr,
+            extractor: LocalEventExtractor()
+        )
+
+        await model.importClipboardImage()
+
+        guard case .failed(let issue) = model.phase else {
+            return XCTFail("Expected failed phase")
+        }
+        XCTAssertEqual(issue.title, "Clipboard has no usable image")
+        let ocrCalls = await ocr.callCount()
+        XCTAssertEqual(ocrCalls, 0)
+    }
+
+    func testExtractedDraftCanBeListedReopenedAndExplicitlyDeleted() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let store = SpyDraftStore()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            draftStore: store
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+        let storedID = try XCTUnwrap(model.recentDrafts.first?.id)
+        XCTAssertEqual(model.recentDrafts.first?.title, "AI Workshop")
+
+        model.startOver()
+        XCTAssertEqual(model.phase, .ready)
+        await model.openRecentDraft(id: storedID)
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draft.id, storedID)
+        XCTAssertEqual(model.draft.title.value, "AI Workshop")
+
+        model.startOver()
+        await model.deleteRecentDraft(id: storedID)
+        XCTAssertTrue(model.recentDrafts.isEmpty)
+        let retained = await store.snapshot(id: storedID)
+        XCTAssertNil(retained)
+    }
+
+    func testCalendarSuccessUpdatesPersistedLifecycleAfterConfirmation() async throws {
+        let store = SpyDraftStore()
+        let scheduler = SpyCalendarScheduler()
+        let model = SnapCalModel(
+            validator: FailingValidator(),
+            ocrService: StubOCR(lines: []),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler,
+            draftStore: store
+        )
+        model.draft = makeCalendarDraft()
+        model.phase = .review
+
+        model.requestCalendarCreation()
+        await model.confirmCalendarCreation()
+
+        let persisted = await store.snapshot(id: model.draft.id)
+        XCTAssertEqual(persisted?.lifecycle, .created)
+        XCTAssertEqual(persisted?.receipt?.providerEventID, "event-1")
+        XCTAssertEqual(model.recentDrafts.first?.lifecycle, .created)
+    }
+
+    func testHistoryFailureDoesNotBlockReviewOrCallCalendar() async throws {
+        let scheduler = SpyCalendarScheduler()
+        let model = SnapCalModel(
+            validator: StubValidator(
+                image: try makeValidatedImage(
+                    capturedAt: Date(timeIntervalSince1970: 1_783_930_400)
+                )
+            ),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler,
+            draftStore: UnavailableDraftStore()
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draftHistoryIssue, "Recent drafts are temporarily unavailable.")
+        let calls = await scheduler.createCallCount()
+        XCTAssertEqual(calls, 0)
+    }
+
     func testCalendarWriteRequiresRequestThenExplicitConfirmation() async throws {
         let scheduler = SpyCalendarScheduler()
         let model = makeCalendarModel(scheduler: scheduler)
@@ -204,7 +330,213 @@ final class SnapCalModelTests: XCTestCase {
         )
     }
 
-    private func makeValidatedImage(capturedAt: Date) throws -> ValidatedImage {
+    func testScreenshotRetentionIsDefaultOffAndNeverTouchesVault() async throws {
+        let vault = SpyScreenshotVault()
+        let imageData = Data("private-image".utf8)
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400),
+                originalData: imageData,
+                sourceFingerprint: "fingerprint-1"
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            screenshotVault: vault
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        XCTAssertFalse(model.screenshotHistoryEnabled)
+        XCTAssertNil(model.screenshotPreviewData)
+        let storeCalls = await vault.storeCallCount()
+        XCTAssertEqual(storeCalls, 0)
+    }
+
+    func testScreenshotIsNotRetainedWhenDraftPersistenceFails() async throws {
+        let vault = SpyScreenshotVault()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400),
+                originalData: Data("private-image".utf8),
+                sourceFingerprint: "fingerprint-1"
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            draftStore: UnavailableDraftStore(),
+            screenshotVault: vault
+        )
+        model.setScreenshotHistoryEnabled(true)
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        let storeCalls = await vault.storeCallCount()
+        XCTAssertEqual(storeCalls, 0)
+        XCTAssertNil(model.screenshotPreviewData)
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draftHistoryIssue, "Recent drafts are temporarily unavailable.")
+    }
+
+    func testOptInScreenshotRetentionUsesVaultAndClearAllDeletesLocalDataOnly() async throws {
+        let vault = SpyScreenshotVault()
+        let store = SpyDraftStore()
+        let scheduler = SpyCalendarScheduler()
+        let imageData = Data("private-image".utf8)
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400),
+                originalData: imageData,
+                sourceFingerprint: "fingerprint-1"
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler,
+            draftStore: store,
+            screenshotVault: vault
+        )
+        model.setScreenshotHistoryEnabled(true)
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        let storeCalls = await vault.storeCallCount()
+        XCTAssertEqual(storeCalls, 1)
+        XCTAssertEqual(model.screenshotPreviewData, imageData)
+        XCTAssertFalse(model.recentDrafts.isEmpty)
+
+        await model.clearLocalHistory()
+
+        let vaultDeleteAllCalls = await vault.deleteAllCallCount()
+        let storeDeleteAllCalls = await store.deleteAllCallCount()
+        XCTAssertEqual(vaultDeleteAllCalls, 1)
+        XCTAssertEqual(storeDeleteAllCalls, 1)
+        XCTAssertTrue(model.recentDrafts.isEmpty)
+        XCTAssertEqual(model.phase, .ready)
+        let calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
+    }
+
+    func testClearAllStillDeletesDraftsWhenScreenshotVaultIsUnavailable() async throws {
+        let store = SpyDraftStore()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400)
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            draftStore: store,
+            screenshotVault: FailingDeleteAllScreenshotVault()
+        )
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        await model.clearLocalHistory()
+
+        let storeDeleteAllCalls = await store.deleteAllCallCount()
+        XCTAssertEqual(storeDeleteAllCalls, 1)
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertTrue(model.recentDrafts.isEmpty)
+        XCTAssertEqual(
+            model.privacyIssue,
+            "Encrypted screenshot history is temporarily unavailable."
+        )
+    }
+
+    func testDuplicateImportWarnsBeforeCalendarConfirmationAndDoesNotWrite() async throws {
+        let store = SpyDraftStore()
+        let scheduler = SpyCalendarScheduler()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400),
+                sourceFingerprint: "same-screenshot"
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler,
+            draftStore: store
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/first.png"))
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/second.png"))
+
+        XCTAssertTrue(model.duplicateWarnings.contains {
+            $0.kind == .sameScreenshot && $0.severity == .high
+        })
+        model.requestCalendarCreation()
+        XCTAssertEqual(model.calendarState, .awaitingConfirmation)
+        let calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
+    }
+
+    func testLocationLookupOnlyRunsAfterExplicitRequestAndSelectionEditsDraft() async {
+        let candidate = LocationCandidate(
+            id: "landmark-81",
+            name: "Landmark 81",
+            address: "720A Dien Bien Phu, Ho Chi Minh City",
+            latitude: 10.795,
+            longitude: 106.722
+        )
+        let resolver = SpyLocationResolver(candidates: [candidate])
+        let model = SnapCalModel(
+            validator: FailingValidator(),
+            ocrService: StubOCR(lines: []),
+            extractor: LocalEventExtractor(),
+            locationResolver: resolver
+        )
+        model.draft = makeCalendarDraft()
+        model.draft.location.applyUserEdit("Landmark 81")
+        model.phase = .review
+
+        let callsBeforeRequest = await resolver.callCount()
+        XCTAssertEqual(callsBeforeRequest, 0)
+        await model.resolveLocationCandidates()
+        let callsAfterRequest = await resolver.callCount()
+        XCTAssertEqual(callsAfterRequest, 1)
+        XCTAssertEqual(model.locationCandidates, [candidate])
+
+        model.selectLocationCandidate(candidate)
+        XCTAssertEqual(model.draft.location.value, candidate.displayValue)
+        XCTAssertTrue(model.draft.location.wasEditedByUser)
+    }
+
+    func testExtractionAddsContextAwareReminderSuggestions() async throws {
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: Date(timeIntervalSince1970: 1_783_930_400)
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            now: { Date(timeIntervalSince1970: 1_783_930_400) }
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        XCTAssertEqual(
+            model.draft.reminders,
+            [EventReminder(minutesBefore: 1_440), EventReminder(minutesBefore: 120)]
+        )
+    }
+
+    private func makeValidatedImage(
+        capturedAt: Date,
+        originalData: Data? = nil,
+        sourceFingerprint: String? = nil
+    ) throws -> ValidatedImage {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: 1,
@@ -220,7 +552,9 @@ final class SnapCalModelTests: XCTestCase {
         return ValidatedImage(
             cgImage: try XCTUnwrap(bitmap.cgImage),
             fileName: "workshop.png",
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            originalData: originalData,
+            sourceFingerprint: sourceFingerprint
         )
     }
 
@@ -318,10 +652,14 @@ private actor SpyCalendarScheduler: CalendarScheduling {
 private struct StubValidator: ImageValidating {
     let image: ValidatedImage
     func validate(_ url: URL) throws -> ValidatedImage { image }
+    func validate(_ clipboardImage: ClipboardImage) throws -> ValidatedImage { image }
 }
 
 private struct FailingValidator: ImageValidating {
     func validate(_ url: URL) throws -> ValidatedImage {
+        throw ImageValidationError.unsupportedFormat
+    }
+    func validate(_ clipboardImage: ClipboardImage) throws -> ValidatedImage {
         throw ImageValidationError.unsupportedFormat
     }
 }
@@ -329,4 +667,117 @@ private struct FailingValidator: ImageValidating {
 private struct StubOCR: OCRRecognizing {
     let lines: [RecognizedTextLine]
     func recognizeText(in image: CGImage) async throws -> [RecognizedTextLine] { lines }
+}
+
+@MainActor
+private struct StubClipboardReader: ClipboardImageReading {
+    let image: ClipboardImage
+    func readImage() throws -> ClipboardImage { image }
+}
+
+@MainActor
+private struct MissingClipboardReader: ClipboardImageReading {
+    func readImage() throws -> ClipboardImage {
+        throw ClipboardImageReadingError.noSupportedImage
+    }
+}
+
+private actor SpyOCR: OCRRecognizing {
+    private var calls = 0
+
+    func recognizeText(in image: CGImage) async throws -> [RecognizedTextLine] {
+        calls += 1
+        return []
+    }
+
+    func callCount() -> Int { calls }
+}
+
+private actor SpyDraftStore: DraftPersisting {
+    private var drafts: [UUID: PersistedDraft] = [:]
+
+    func save(_ draft: PersistedDraft) async throws {
+        drafts[draft.id] = draft
+    }
+
+    func recent(limit: Int) async throws -> [RecentDraftSummary] {
+        drafts.values
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .prefix(limit)
+            .map(\.summary)
+    }
+
+    func load(id: UUID) async throws -> PersistedDraft? {
+        drafts[id]
+    }
+
+    func duplicateWarnings(for draft: PersistedDraft) async throws -> [DuplicateWarning] {
+        DuplicateDetector.warnings(
+            for: draft.duplicateSignature,
+            among: drafts.values.map(\.duplicateSignature)
+        )
+    }
+
+    func delete(id: UUID) async throws {
+        drafts[id] = nil
+    }
+
+    func deleteAll() async throws {
+        drafts.removeAll()
+        deleteAllCalls += 1
+    }
+
+    private var deleteAllCalls = 0
+
+    func deleteAllCallCount() -> Int { deleteAllCalls }
+
+    func snapshot(id: UUID) -> PersistedDraft? {
+        drafts[id]
+    }
+}
+
+private actor SpyScreenshotVault: ScreenshotVaulting {
+    private var images: [UUID: Data] = [:]
+    private var storeCalls = 0
+    private var deleteAllCalls = 0
+
+    func store(_ imageData: Data, draftID: UUID) async throws {
+        storeCalls += 1
+        images[draftID] = imageData
+    }
+
+    func load(draftID: UUID) async throws -> Data? { images[draftID] }
+
+    func delete(draftID: UUID) async throws { images[draftID] = nil }
+
+    func deleteAll() async throws {
+        deleteAllCalls += 1
+        images.removeAll()
+    }
+
+    func storeCallCount() -> Int { storeCalls }
+    func deleteAllCallCount() -> Int { deleteAllCalls }
+}
+
+private struct FailingDeleteAllScreenshotVault: ScreenshotVaulting {
+    func store(_ imageData: Data, draftID: UUID) async throws { }
+    func load(draftID: UUID) async throws -> Data? { nil }
+    func delete(draftID: UUID) async throws { }
+    func deleteAll() async throws { throw ScreenshotVaultError.unavailable }
+}
+
+private actor SpyLocationResolver: LocationResolving {
+    private let resolvedCandidates: [LocationCandidate]
+    private var calls = 0
+
+    init(candidates: [LocationCandidate]) {
+        resolvedCandidates = candidates
+    }
+
+    func candidates(for query: String) async throws -> [LocationCandidate] {
+        calls += 1
+        return resolvedCandidates
+    }
+
+    func callCount() -> Int { calls }
 }

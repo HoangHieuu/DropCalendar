@@ -37,6 +37,33 @@ final class ImageValidatorTests: XCTestCase {
         }
     }
 
+    func testAcceptsInMemoryClipboardPNG() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_784_000_000)
+        let clipboardImage = ClipboardImage(
+            data: try makePNGData(),
+            fileName: "Clipboard Screenshot.png",
+            capturedAt: capturedAt
+        )
+
+        let result = try ImageValidator().validate(clipboardImage)
+
+        XCTAssertEqual(result.fileName, clipboardImage.fileName)
+        XCTAssertEqual(result.capturedAt, capturedAt)
+        XCTAssertEqual(result.cgImage.width, 2)
+    }
+
+    func testRejectsOversizedClipboardImageBeforeDecode() {
+        let clipboardImage = ClipboardImage(
+            data: Data(count: ImageValidator.maximumBytes + 1),
+            fileName: "Clipboard Screenshot.png",
+            capturedAt: Date()
+        )
+
+        XCTAssertThrowsError(try ImageValidator().validate(clipboardImage)) { error in
+            XCTAssertEqual(error as? ImageValidationError, .fileTooLarge)
+        }
+    }
+
     private func makePNGData() throws -> Data {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,

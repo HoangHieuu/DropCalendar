@@ -3,6 +3,76 @@ import XCTest
 @testable import SnapCal
 
 final class GoogleOAuthTests: XCTestCase {
+    func testKeychainStoragePolicyUsesLoginForAdHocAndDataProtectionForTeamSignedBuilds() {
+        XCTAssertEqual(
+            KeychainStoragePolicy.preferredBackend(teamIdentifier: nil),
+            .login
+        )
+        XCTAssertEqual(
+            KeychainStoragePolicy.preferredBackend(teamIdentifier: ""),
+            .login
+        )
+        XCTAssertEqual(
+            KeychainStoragePolicy.preferredBackend(teamIdentifier: "TEAM123"),
+            .dataProtection
+        )
+    }
+
+    func testCredentialStoreReadsAlternateBackendAcrossSigningTransition() async throws {
+        let client = StubKeychainItemClient(readResults: [
+            .dataProtection: .notFound,
+            .login: .value(Data("persisted-refresh-token".utf8))
+        ])
+        let store = KeychainCredentialStore(
+            service: "com.snapcal.tests.oauth",
+            account: "desktop-client-id",
+            preferredBackend: .dataProtection,
+            itemClient: client
+        )
+
+        let token = try await store.readRefreshToken()
+
+        XCTAssertEqual(token, "persisted-refresh-token")
+        XCTAssertEqual(client.readBackends(), [.dataProtection, .login])
+    }
+
+    func testCredentialStoreWritesOnlyPreferredBackendAndRemovesAlternateCopy() async throws {
+        let client = StubKeychainItemClient()
+        let store = KeychainCredentialStore(
+            service: "com.snapcal.tests.oauth",
+            account: "desktop-client-id",
+            preferredBackend: .login,
+            itemClient: client
+        )
+
+        try await store.saveRefreshToken("fixture-refresh-token")
+
+        XCTAssertEqual(client.writeBackends(), [.login])
+        XCTAssertEqual(client.deleteBackends(), [.dataProtection])
+    }
+
+    func testAdHocLoginKeychainRoundTripUsesIsolatedItemAndCleansUp() async throws {
+        let service = "com.snapcal.tests.oauth.\(UUID().uuidString)"
+        let store = KeychainCredentialStore(
+            service: service,
+            account: "isolated-platform-fixture",
+            preferredBackend: .login
+        )
+
+        try? await store.deleteRefreshToken()
+        do {
+            try await store.saveRefreshToken("not-a-real-provider-token")
+            let savedToken = try await store.readRefreshToken()
+            XCTAssertEqual(savedToken, "not-a-real-provider-token")
+            try await store.deleteRefreshToken()
+            let deletedToken = try await store.readRefreshToken()
+            XCTAssertNil(deletedToken)
+        } catch {
+            try? await store.deleteRefreshToken()
+            throw error
+        }
+    }
+
     func testPKCEChallengeMatchesRFC7636Vector() {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         XCTAssertEqual(
@@ -185,4 +255,76 @@ private actor FailingSaveCredentialStore: OAuthCredentialStoring {
         throw GoogleCalendarError.keychainFailure
     }
     func deleteRefreshToken() async throws { }
+}
+
+private final class StubKeychainItemClient: KeychainItemAccessing, @unchecked Sendable {
+    private let lock = NSLock()
+    private let readResults: [KeychainStorageBackend: KeychainReadResult]
+    private let writeStatus: OSStatus
+    private let deleteStatus: OSStatus
+    private var recordedReads: [KeychainStorageBackend] = []
+    private var recordedWrites: [KeychainStorageBackend] = []
+    private var recordedDeletes: [KeychainStorageBackend] = []
+
+    init(
+        readResults: [KeychainStorageBackend: KeychainReadResult] = [:],
+        writeStatus: OSStatus = errSecSuccess,
+        deleteStatus: OSStatus = errSecSuccess
+    ) {
+        self.readResults = readResults
+        self.writeStatus = writeStatus
+        self.deleteStatus = deleteStatus
+    }
+
+    func read(
+        service: String,
+        account: String,
+        backend: KeychainStorageBackend
+    ) -> KeychainReadResult {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedReads.append(backend)
+        return readResults[backend] ?? .notFound
+    }
+
+    func write(
+        _ data: Data,
+        service: String,
+        account: String,
+        backend: KeychainStorageBackend
+    ) -> OSStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedWrites.append(backend)
+        return writeStatus
+    }
+
+    func delete(
+        service: String,
+        account: String,
+        backend: KeychainStorageBackend
+    ) -> OSStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        recordedDeletes.append(backend)
+        return deleteStatus
+    }
+
+    func readBackends() -> [KeychainStorageBackend] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedReads
+    }
+
+    func writeBackends() -> [KeychainStorageBackend] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedWrites
+    }
+
+    func deleteBackends() -> [KeychainStorageBackend] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedDeletes
+    }
 }

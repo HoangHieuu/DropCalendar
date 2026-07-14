@@ -72,6 +72,33 @@ final class CalendarEventMapperTests: XCTestCase {
         XCTAssertThrowsError(try CalendarEventMapper.request(from: makeDraft(start: start, end: start)))
     }
 
+    func testMapsReviewedRemindersAndRejectsProviderLimitViolation() throws {
+        let start = Date(timeIntervalSince1970: 1_787_415_400)
+        var draft = makeDraft(start: start, end: start.addingTimeInterval(3_600))
+        draft.reminders = [
+            EventReminder(minutesBefore: 1_440),
+            EventReminder(minutesBefore: 60)
+        ]
+
+        let request = try CalendarEventMapper.request(from: draft, timeZone: timeZone)
+        XCTAssertEqual(request.reminders, draft.reminders)
+
+        draft.reminders.append(contentsOf: [
+            EventReminder(minutesBefore: 30),
+            EventReminder(minutesBefore: 15),
+            EventReminder(minutesBefore: 5),
+            EventReminder(minutesBefore: 0)
+        ])
+        XCTAssertThrowsError(try CalendarEventMapper.request(from: draft)) { error in
+            XCTAssertEqual(
+                error as? GoogleCalendarError,
+                .invalidDraft(
+                    "Google Calendar allows at most five reminder overrides. Remove a reminder before creating the event."
+                )
+            )
+        }
+    }
+
     private func makeDraft(start: Date, end: Date, isAllDay: Bool = false) -> EventDraft {
         EventDraft(
             capturedAt: start,

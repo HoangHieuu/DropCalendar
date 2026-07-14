@@ -24,7 +24,11 @@ final class GoogleCalendarClientTests: XCTestCase {
                 start: start,
                 end: start.addingTimeInterval(3_600),
                 timeZone: TimeZone(identifier: "Asia/Ho_Chi_Minh")!
-            )
+            ),
+            reminders: [
+                EventReminder(minutesBefore: 1_440),
+                EventReminder(minutesBefore: 15)
+            ]
         )
 
         let receipt = try await client.createEvent(request, accessToken: "access-token")
@@ -37,6 +41,11 @@ final class GoogleCalendarClientTests: XCTestCase {
         let body = try XCTUnwrap(captured.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["summary"] as? String, "AI Workshop")
+        let reminders = try XCTUnwrap(json["reminders"] as? [String: Any])
+        XCTAssertEqual(reminders["useDefault"] as? Bool, false)
+        let overrides = try XCTUnwrap(reminders["overrides"] as? [[String: Any]])
+        XCTAssertEqual(overrides.map { $0["method"] as? String }, ["popup", "popup"])
+        XCTAssertEqual(overrides.compactMap { $0["minutes"] as? Int }, [1_440, 15])
         XCTAssertEqual(receipt.providerEventID, "provider-123")
         XCTAssertEqual(receipt.calendarLink?.scheme, "https")
     }
