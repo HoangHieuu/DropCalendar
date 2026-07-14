@@ -69,5 +69,17 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
   they reviewed the extracted image information, explicitly confirmed creation,
   and observed the event in Google Calendar. This closes the Phase 1 live OAuth
   and confirmed-write proof without exposing event contents or credentials.
+- 2026-07-14: Xcode provisioned an Apple Development identity for team
+  `HKUD5AT6V6`; the app and both test bundles now share that team, and the app's
+  registered identifier and Keychain access group are
+  `com.hkud5at6v6.snapcal` and
+  `HKUD5AT6V6.com.hkud5at6v6.snapcal`.
+- All 89 macOS tests pass in a fresh signed build, including an isolated Data
+  Protection Keychain write/read/delete/not-found round trip with a non-provider
+  fixture. The obsolete login-Keychain OAuth item was deleted without exposing
+  its value.
+- Native inspection proved the signed app launches and relaunches without the
+  login-Keychain password dialog. A new Google consent is required once because
+  the obsolete refresh token was intentionally removed during migration.
 - Pending user-driven proof: relaunch refresh-token reuse, provider-link opening,
-  signed Data Protection Keychain reuse, and disconnect/reconnect.
+  and disconnect/reconnect after the one-time Google reconnection.

@@ -66,7 +66,9 @@ direct provider adapter with OpenRouter, uses strict JSON Schema output, keeps
 Bearer authorization server-side, redacts upstream failures, and defaults to
 `google/gemini-3.1-flash-lite`. US-005 adds deterministic top-center panel
 geometry, first-supported-image selection, unsupported-drop refusal, and a
-shared-model integration path that still lands in review. US-006 adds strict
+shared-model integration path that still lands in review. Its UI smoke also
+proves pointer hover expands once and keeps a stable frame instead of feeding
+transient tracking exits back into panel resizing. US-006 adds strict
 corpus integrity/distribution checks, redacted language-separated scoring, a
 100-image generated regression corpus, and separate production-source Local
 Only and explicitly cloud-opted Accuracy runners. US-007 adds deterministic
@@ -78,14 +80,16 @@ image/full-OCR storage. US-011 adds provider-bounded reminders, local duplicate
 warnings, explicit-only MapKit candidates, default-off AES-GCM screenshot
 history, and scoped Clear All deletion.
 
-Fresh combined proof on 2026-07-14: the macOS suite passes all 86 tests; the
+Fresh combined proof on 2026-07-14: the team-signed macOS suite passes all 89
+tests, including an isolated Data Protection Keychain round trip; the
 FastAPI suite passes 16 tests; the benchmark package passes 9 tests; and the
 production Local Only runner scores all 100 generated fixtures with zero
-critical wrong values and about 137 ms median latency. A separate two-case
-macOS UI smoke target proves the app-owned status item, clipboard-to-review
-flow, and isolated local draft persistence across relaunch with no Calendar
-write. Native inspection shows the deterministic Local Only disclosure and
+critical wrong values and about 137 ms median latency. The latest team-signed
+macOS UI smoke passes clipboard-to-review persistence and stable notch hover;
+its menu-bar case is currently red because the status item is reported as not
+hittable. No UI smoke creates a Calendar event.
+Native inspection shows the deterministic Local Only disclosure and
 default-off encrypted screenshot setting. The generated corpus remains
 synthetic-only; licensed real-world Local Only/Accuracy reports, direct notch
-drag/deletion smoke, live MapKit candidates, and team-signed Data Protection
-Keychain reuse remain open platform or user-owned proofs.
+drag/deletion smoke, live MapKit candidates, real-token relaunch reuse, and
+team-signed disconnect/reconnect remain open platform or user-owned proofs.

@@ -67,7 +67,15 @@ Tradeoffs:
 
 ## Follow-Up
 
-- Add user-driven proof that one consent stores authorization, a relaunched app
-  refreshes without reopening the browser, and Disconnect removes both stores.
-- Before distribution, select Apple signing and the production OAuth broker or
-  Google Sign-In boundary.
+- 2026-07-14: the default macOS target moved from forced ad-hoc signing to
+  automatic Apple Development signing for team `HKUD5AT6V6`. The registered
+  identifier is `com.hkud5at6v6.snapcal`, and its provisioned Keychain access
+  group is `HKUD5AT6V6.com.hkud5at6v6.snapcal`.
+- An isolated signed-host platform test now proves a Data Protection Keychain
+  write, read, delete, and not-found round trip without using a provider token.
+- The obsolete login-Keychain OAuth item was deleted during the transition. The
+  signed app then launched and relaunched without a Keychain password dialog.
+- User-driven proof still needs one new Google consent followed by refresh-token
+  reuse after relaunch and Disconnect/reconnect verification.
+- Production distribution still needs distribution signing/notarization and a
+  production OAuth broker or Google Sign-In boundary.

@@ -15,6 +15,9 @@ Google desktop OAuth with PKCE uses the same loopback service for secret-bearing
 token exchange and keeps Calendar REST creation behind explicit confirmation.
 Refresh-token storage is signature-aware: team-signed builds use Data Protection
 Keychain and ad-hoc development builds use the local login Keychain.
+The default macOS target is now Apple Development signed for team `HKUD5AT6V6`
+under `com.hkud5at6v6.snapcal`, with an explicit Keychain access group. The
+login-Keychain path remains a fallback for deliberately ad-hoc builds.
 There is no production service deployment or server database. The checked-in
 100-image corpus is generated regression data, not a licensed real-world
 accuracy corpus.
@@ -164,7 +167,9 @@ Parse and validate all unknown data at entry:
 - Keychain stores the OAuth refresh token on Apple platforms. Team-signed builds
   prefer Data Protection Keychain; ad-hoc development builds use the encrypted
   local login Keychain. Reads check the alternate backend during signing
-  transitions, and Disconnect deletes both. Access tokens remain in memory.
+  transitions, and Disconnect deletes both. The default target's application
+  identifier and Keychain access group are provisioned from its Apple team and
+  bundle identifier. Access tokens remain in memory.
 - PostgreSQL is deferred until a server-owned metadata need is proven.
 - Screenshot history is disabled by default. If explicitly enabled, app-owned
   image copies use an AES-GCM local vault and a Keychain key. Clear All removes

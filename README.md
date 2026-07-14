@@ -31,6 +31,9 @@ when enabled, app-owned copies are AES-GCM encrypted with a Keychain-held key.
 The Google refresh token is the only persisted provider credential. Team-signed
 builds use the macOS Data Protection Keychain; ad-hoc development builds use
 the user's encrypted login Keychain so authorization survives an app restart.
+The checked-in macOS target uses automatic Apple Development signing for team
+`HKUD5AT6V6` and the registered bundle identifier
+`com.hkud5at6v6.snapcal`, so normal Xcode runs take the Data Protection path.
 The same loopback service brokers Google OAuth token
 exchange because the installed OAuth credential requires its client secret;
 the secret and downloaded credential JSON never enter the app bundle or source.
@@ -54,6 +57,10 @@ as an OAuth test user is required for the live Calendar flow. Calendar creation
 also requires the local service described below. The downloaded desktop
 credential JSON stays outside this repository; the app embeds only its public
 OAuth client ID and never embeds or reads the client secret.
+
+The first build may ask Xcode to provision the configured Apple Development
+team. Forks must replace the team and bundle identifiers with values owned by
+their Apple Developer account rather than falling back to ad-hoc signing.
 
 After launch, move the pointer to the compact `SnapCal` pill at the top-center
 of the display or drag a PNG, JPEG, or HEIC screenshot onto it. The panel

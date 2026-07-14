@@ -63,11 +63,14 @@ No Harness behavior change is expected.
 
 ## Evidence
 
-- The macOS target builds and its 37 XCTest cases pass.
+- The macOS target builds and all 88 XCTest cases pass.
 - `NotchDropZoneTests` proves compact/expanded top anchoring, safe-area sizing,
-  first-supported-image selection, multi-item reporting, and unsupported drops.
+  containment of the compact hover region during expansion, edge-jitter
+  tolerance, first-supported-image selection, multi-item reporting, and
+  unsupported drops.
 - `SnapCalModelTests.testNotchDropImporterFeedsExistingReviewFlow` proves the
   selected drop enters the existing review state without Calendar creation.
-- Native UI inspection proves the compact all-spaces panel is exposed as
-  `notchDropZone` with the expected accessibility label and visual pill.
-- Live pointer-hover and Finder drop remain user-driven platform proof.
+- `SnapCalUITests.testNotchHoverExpandsAndKeepsAStableFrame` moves the native
+  pointer onto `notchDropZone`, waits for expansion, and proves its frame stays
+  fixed across repeated samples.
+- Finder drop remains user-driven E2E proof.
