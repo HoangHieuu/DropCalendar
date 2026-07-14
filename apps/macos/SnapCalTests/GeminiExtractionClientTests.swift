@@ -2,7 +2,7 @@ import AppKit
 import XCTest
 @testable import SnapCal
 
-final class GeminiExtractionClientTests: XCTestCase {
+final class AccuracyExtractionClientTests: XCTestCase {
     func testExtractSendsImageAndLayoutWithoutAnyCredentialAndBuildsAllDayDraft() async throws {
         let response = try XCTUnwrap(HTTPURLResponse(
             url: URL(string: "http://127.0.0.1:8765/v1/extract")!,
@@ -10,10 +10,10 @@ final class GeminiExtractionClientTests: XCTestCase {
             httpVersion: nil,
             headerFields: nil
         ))
-        let transport = GeminiRecordingTransport(data: Data(validResponse.utf8), response: response)
+        let transport = AccuracyRecordingTransport(data: Data(validResponse.utf8), response: response)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")!
-        let client = try GeminiExtractionClient(
+        let client = try AccuracyExtractionClient(
             endpoint: URL(string: "http://127.0.0.1:8765/v1/extract")!,
             transport: transport,
             calendar: calendar,
@@ -52,7 +52,7 @@ final class GeminiExtractionClientTests: XCTestCase {
         XCTAssertEqual(json["schema_version"] as? String, "1")
         XCTAssertFalse((json["image_base64"] as? String ?? "").isEmpty)
         XCTAssertNotNil(encodedLines.first?["box"])
-        XCTAssertEqual(result.model, "gemini-2.5-flash")
+        XCTAssertEqual(result.model, "google/gemini-3.1-flash-lite")
         XCTAssertEqual(result.draft.title.value, "Agentic AI Build Week")
         XCTAssertTrue(result.draft.isAllDay)
         XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(result.draft.start.value)), 8)
@@ -61,7 +61,7 @@ final class GeminiExtractionClientTests: XCTestCase {
 
     func testRejectsInsecureRemoteHTTPService() {
         XCTAssertThrowsError(
-            try GeminiExtractionClient(endpoint: URL(string: "http://example.com/v1/extract")!)
+            try AccuracyExtractionClient(endpoint: URL(string: "http://example.com/v1/extract")!)
         ) { error in
             XCTAssertEqual(error as? CloudExtractionError, .invalidConfiguration)
         }
@@ -76,8 +76,8 @@ final class GeminiExtractionClientTests: XCTestCase {
         ))
         let reversed = validResponse
             .replacingOccurrences(of: #""date":"2026-07-08""#, with: #""date":"2026-07-13""#)
-        let transport = GeminiRecordingTransport(data: Data(reversed.utf8), response: response)
-        let client = try GeminiExtractionClient(
+        let transport = AccuracyRecordingTransport(data: Data(reversed.utf8), response: response)
+        let client = try AccuracyExtractionClient(
             endpoint: URL(string: "http://localhost:8765/v1/extract")!,
             transport: transport
         )
@@ -96,7 +96,7 @@ final class GeminiExtractionClientTests: XCTestCase {
     }
 
     private var validResponse: String {
-        #"{"schema_version":"1","model":"gemini-2.5-flash","event":{"title":{"value":"Agentic AI Build Week","evidence_text":"AGENTIC AI BUILD WEEK","confidence":0.98,"is_inferred":false},"start":{"date":"2026-07-08","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"end":{"date":"2026-07-12","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"location":{"value":"Ho Chi Minh, Vietnam","evidence_text":"Ho Chi Minh, Vietnam","confidence":0.97,"is_inferred":false},"description":{"value":"5 Days (Workshops + Hackathon)","evidence_text":"5 Days (Workshops + Hackathon)","confidence":0.94,"is_inferred":false},"is_all_day":true,"ambiguities":[]}}"#
+        #"{"schema_version":"1","model":"google/gemini-3.1-flash-lite","event":{"title":{"value":"Agentic AI Build Week","evidence_text":"AGENTIC AI BUILD WEEK","confidence":0.98,"is_inferred":false},"start":{"date":"2026-07-08","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"end":{"date":"2026-07-12","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"location":{"value":"Ho Chi Minh, Vietnam","evidence_text":"Ho Chi Minh, Vietnam","confidence":0.97,"is_inferred":false},"description":{"value":"5 Days (Workshops + Hackathon)","evidence_text":"5 Days (Workshops + Hackathon)","confidence":0.94,"is_inferred":false},"is_all_day":true,"ambiguities":[]}}"#
     }
 
     private func makeValidatedImage(capturedAt: Date) throws -> ValidatedImage {
@@ -120,7 +120,7 @@ final class GeminiExtractionClientTests: XCTestCase {
     }
 }
 
-private actor GeminiRecordingTransport: HTTPTransport {
+private actor AccuracyRecordingTransport: HTTPTransport {
     private let data: Data
     private let response: HTTPURLResponse
     private var request: URLRequest?

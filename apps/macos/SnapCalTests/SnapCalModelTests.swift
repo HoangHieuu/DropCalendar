@@ -107,7 +107,7 @@ final class SnapCalModelTests: XCTestCase {
         let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
         let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
             draft: makeCloudDraft(capturedAt: capturedAt),
-            model: "gemini-2.5-flash"
+            model: "google/gemini-3.1-flash-lite"
         )))
         let model = SnapCalModel(
             validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
@@ -133,7 +133,7 @@ final class SnapCalModelTests: XCTestCase {
         let cloudDraft = makeCloudDraft(capturedAt: capturedAt)
         let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
             draft: cloudDraft,
-            model: "gemini-2.5-flash"
+            model: "google/gemini-3.1-flash-lite"
         )))
         let model = SnapCalModel(
             validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
@@ -152,7 +152,7 @@ final class SnapCalModelTests: XCTestCase {
         let cloudCalls = await cloud.callCount()
         XCTAssertEqual(cloudCalls, 1)
         XCTAssertEqual(model.draft.title.value, "Agentic AI Build Week")
-        XCTAssertEqual(model.extractionNotice, .gemini(model: "gemini-2.5-flash"))
+        XCTAssertEqual(model.extractionNotice, .openRouter(model: "google/gemini-3.1-flash-lite"))
         XCTAssertEqual(model.phase, .review)
     }
 
