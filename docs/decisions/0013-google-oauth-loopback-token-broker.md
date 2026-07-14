@@ -76,3 +76,5 @@ Tradeoffs:
 - Before production distribution, choose between an Apple-signed Google
   Sign-In SDK integration and an authenticated hosted broker.
 - Add signed Keychain platform proof once an Apple signing identity is present.
+- Decision 0014 adds a login-Keychain development path for ad-hoc builds while
+  preserving Data Protection Keychain as the team-signed production path.

@@ -19,6 +19,9 @@
 5. Calendar adapter calls `events.insert` for calendar ID `primary`.
 6. Success exposes the returned link; cancellation or failure preserves draft.
 7. Disconnect deletes the Keychain refresh token and in-memory access token.
+8. A signature-aware policy selects Data Protection Keychain when an Apple team
+   identifier exists and local login Keychain for ad-hoc builds. Reads check the
+   alternate store for signing transitions; saves remove stale alternate data.
 
 ## Interface Contract
 
@@ -38,6 +41,7 @@
 No database or draft persistence is added. Only the Google refresh token is
 persisted in Keychain using the app bundle ID and OAuth client ID as stable
 service/account identifiers. Access tokens remain in memory.
+Neither backend synchronizes the refresh token through iCloud.
 
 ## UI / Platform Impact
 
@@ -58,3 +62,4 @@ logged. User-facing errors use stable redacted categories.
 2. Service account: rejected for personal user calendars.
 3. Pre-connect account button: rejected because the contract starts OAuth only
    from confirmed creation.
+4. Plaintext local persistence: rejected; local builds still use Keychain.

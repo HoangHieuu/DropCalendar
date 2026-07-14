@@ -24,15 +24,22 @@ Calendar event only after a separate confirmation dialog. Local Only is the
 default and makes no cloud extraction call. Accuracy Mode sends the image and
 layout-aware OCR to a loopback FastAPI proxy, which keeps the OpenRouter
 credential out of the app and validates strict structured output from
-`google/gemini-3.1-flash-lite`. Images and
-drafts remain in memory. The Google refresh token is the only persisted value
-and is stored in macOS Keychain when the local build has a usable signed
-Keychain identity. The same loopback service brokers Google OAuth token
+`google/gemini-3.1-flash-lite`. A menu-bar item and clipboard action feed the
+same review flow. Minimized recent drafts persist in owner-only SQLite without
+image bytes or the full OCR transcript. Screenshot history is off by default;
+when enabled, app-owned copies are AES-GCM encrypted with a Keychain-held key.
+The Google refresh token is the only persisted provider credential. Team-signed
+builds use the macOS Data Protection Keychain; ad-hoc development builds use
+the user's encrypted login Keychain so authorization survives an app restart.
+The same loopback service brokers Google OAuth token
 exchange because the installed OAuth credential requires its client secret;
 the secret and downloaded credential JSON never enter the app bundle or source.
 The macOS app also presents a compact top-center notch-style panel that expands
 on hover or drag targeting. Dropping an image there brings the main window
-forward and enters the same extraction and mandatory-review flow.
+forward and enters the same extraction and mandatory-review flow. Review now
+includes context-aware reminder choices, local duplicate warnings, explicit
+Apple Maps candidate lookup, recent-draft reopening/deletion, and Clear All
+local-history controls.
 
 The root `SPEC.md` is the supplied source snapshot. The smaller files under
 `docs/product/`, the active story packets, executable proof, and accepted
@@ -79,11 +86,36 @@ Run the complete test target from Terminal with:
 
 ```bash
 xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
-  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+  -destination 'platform=macOS' -derivedDataPath .build/DerivedData test
 
 .venv/bin/python -m pip install -r services/extraction-api/requirements-dev.txt
 .venv/bin/python -m pytest services/extraction-api/tests -q
+PYTHONPATH=packages/benchmark python3 -m pytest packages/benchmark/tests -q
+scripts/run-local-benchmark.sh
+scripts/run-ui-smoke.sh
 ```
+
+The UI smoke target uses a distinct app bundle, an isolated test database, and
+disabled cloud/Calendar dependencies. It proves the menu-bar entry point,
+clipboard-to-review flow, and local draft persistence across relaunch without
+creating a calendar event or touching normal SnapCal history.
+
+The Accuracy benchmark is deliberately cost-gated because it sends the entire
+corpus through the configured OpenRouter-backed service:
+
+```bash
+SNAPCAL_BENCHMARK_ALLOW_CLOUD=1 scripts/run-accuracy-benchmark.sh
+```
+
+The checked-in 100-image corpus is synthetic regression evidence. It does not
+support a real-world extraction-accuracy claim.
+
+The final licensed corpus may remain outside the repository. Set
+`SNAPCAL_BENCHMARK_MANIFEST`, `SNAPCAL_BENCHMARK_RUNS_DIR`,
+`SNAPCAL_BENCHMARK_REPORT_DIR`, and
+`SNAPCAL_BENCHMARK_REQUIRE_REAL_WORLD=1` before running both benchmark scripts;
+the gate rejects any synthetic row. See `packages/benchmark/README.md` for the
+exact command sequence.
 
 ## Product Rules That Must Not Drift
 
@@ -93,7 +125,8 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
 - Preserve source evidence and confidence for every critical extracted field.
 - Support Vietnamese, English, and mixed-language screenshots from the first
   extraction slice.
-- Delete raw screenshots by default after successful extraction.
+- Retain no app-owned raw screenshot copy by default and never delete the
+  user's original file.
 - Keep platform input native: macOS drag/drop or clipboard, iOS Share
   Extension, and Android Share Target.
 
@@ -146,8 +179,9 @@ and do not initialize or mutate Harness state.
 
 ## What Is Deliberately Not Here Yet
 
-There is no production backend deployment, database schema, benchmark corpus,
-mobile app, or CI workflow. Live OpenRouter extraction still requires a funded
-user-owned key and one user-driven poster proof. The live Google OAuth/create path also
-requires a user-driven platform proof because SnapCal must never consent or
-create an event on the user's behalf.
+There is no production backend deployment, server database, mobile app, or CI
+workflow. The remaining Phase 2 release gate is a licensed, sanitized,
+non-synthetic Vietnamese-English corpus plus complete Local Only and Accuracy
+reports. Accuracy benchmarking requires a funded user-owned OpenRouter key.
+Any future live Google Calendar proof remains user-driven because SnapCal must
+never consent or create an event on the user's behalf.

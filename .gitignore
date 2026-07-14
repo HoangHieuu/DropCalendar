@@ -23,6 +23,9 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
+# Generated extraction benchmark predictions.
+packages/benchmark/runs/*.jsonl
+
 # Downloaded Harness CLI binary for installed project instances.
 scripts/bin/harness-cli
 scripts/bin/harness-cli.exe

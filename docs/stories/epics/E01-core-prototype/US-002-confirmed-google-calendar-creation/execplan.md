@@ -15,6 +15,7 @@ In scope:
 - Timed and all-day event mapping with an editable end.
 - Confirmation, progress, success, cancellation, retry, and error UI.
 - Unit, integration-spy, provider-contract, build, and launch proof.
+- Signature-aware Keychain persistence and refresh reuse across app launches.
 
 Out of scope:
 
@@ -47,6 +48,8 @@ Hard gates:
 7. Update product truth, decision, story proof, and Harness trace.
 8. Route token exchange through the secret-owning loopback service after live
    proof shows the installed credential rejects secretless exchange.
+9. Select Data Protection Keychain for signed builds and login Keychain for
+   ad-hoc local builds, then prove isolated persistence and refresh reuse.
 
 ## Stop Conditions
 

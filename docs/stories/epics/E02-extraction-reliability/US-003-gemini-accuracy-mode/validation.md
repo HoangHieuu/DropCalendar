@@ -44,5 +44,9 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
   2026-07-13; 5 contract tests.
 - Real loopback Uvicorn process: `/health` returned HTTP 200 with
   `model=gemini-2.5-flash` and `ready=false` without a key, as designed.
-- Live Gemini response, latency, cost, and supplied-poster E2E remain pending a
-  dedicated user-provided Gemini key. No benchmark accuracy claim is made.
+- US-004 and decision 0012 replaced the direct Gemini adapter with OpenRouter
+  while preserving this story's opt-in Accuracy Mode, strict validation,
+  visible fallback, and zero-cloud Local Only behavior.
+- 2026-07-14: the user reported a successful live Accuracy Mode extraction
+  through the accepted OpenRouter replacement. No benchmark accuracy claim is
+  made from that single user-driven run.

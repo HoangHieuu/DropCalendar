@@ -45,5 +45,8 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
   redaction without a live provider call.
 - `GET http://127.0.0.1:8765/health`: `200 OK`, provider `openrouter`, model
   `google/gemini-3.1-flash-lite`, and `ready: true`; no provider request made.
-- Live OpenRouter poster output remains user-driven proof because it uses the
-  user's funded account and uploads the opted-in image to an external provider.
+- 2026-07-14: the user reported that a live, explicitly opted-in Accuracy Mode
+  extraction succeeded with their OpenRouter configuration. No key, screenshot,
+  OCR text, or private event content was recorded as proof.
+- This live success proves provider operability only. Accuracy claims remain
+  gated on the versioned Vietnamese-English benchmark.

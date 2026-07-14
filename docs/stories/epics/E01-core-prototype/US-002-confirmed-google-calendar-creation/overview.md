@@ -8,6 +8,8 @@ run completed consent and callback but exposed a provider mismatch: the
 installed OAuth credential rejected the app's secretless token exchange. Token
 exchange now uses the configured loopback SnapCal service, while the app keeps
 PKCE/state validation, tokens, and Calendar insertion.
+The current local build is ad-hoc signed, so it has no Apple team identifier and
+cannot rely on Data Protection Keychain persistence.
 
 ## Target Behavior
 
@@ -16,6 +18,8 @@ dialog, and explicitly confirms. SnapCal then obtains a Google access token
 through desktop OAuth or a Keychain refresh token, inserts one event into the
 user's primary Google Calendar, and reports a calendar link or a recoverable
 error. Cancellation and failures preserve the draft.
+Authorization persists across launches: signed builds prefer Data Protection
+Keychain and ad-hoc development builds use the local login Keychain.
 
 ## Affected Users
 

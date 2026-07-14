@@ -11,6 +11,7 @@ An extracted draft owns:
 - evidence, confidence, and inference metadata per field;
 - ambiguities, overall confidence, and confirmation requirement;
 - lifecycle state: draft, reviewed, creating, created, failed, or discarded.
+- an optional SHA-256 source fingerprint used only for local duplicate checks.
 
 The JSON shape in `SPEC.md` section 7 is the seed contract. Implementation must
 turn it into typed domain/application models before choosing persistence or API
@@ -70,7 +71,16 @@ remains true for every MVP draft.
 
 ## Draft Persistence
 
-SQLite is the first local store for draft metadata. Raw screenshots are not
-part of the durable draft by default. Provider DTOs, local rows, and future API
-payloads must be parsed at their boundaries rather than shared as one mutable
-model.
+SQLite schema version 2 is the local store for minimized draft metadata. It
+persists reviewed fields, field evidence excerpts, reminder choices,
+ambiguities, extraction source, lifecycle, and an optional source fingerprint.
+It does not persist screenshot bytes or the full OCR transcript. Version-1
+databases migrate transactionally before fingerprint writes, and newer unknown
+schemas are rejected instead of guessed.
+
+Recent drafts reopen into the same mandatory review state. User edits are
+debounced into the existing record; successful Calendar creation marks the
+record as created; per-draft deletion and Clear All are explicit actions. Raw
+screenshots are not part of the durable draft by default. Provider DTOs, local
+rows, and future API payloads must be parsed at their boundaries rather than
+shared as one mutable model.

@@ -2,7 +2,8 @@
 
 This repository is SnapCal, a Vietnamese-English screenshot-to-Google-Calendar
 event creator. The Harness is the collaboration workflow; it is not product
-truth and there is no application implementation yet.
+truth. A macOS implementation now exists; the living product docs, accepted
+decisions, active story packets, and executable proof define its current state.
 
 Before product work, read:
 

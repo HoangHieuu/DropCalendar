@@ -4,14 +4,16 @@
 
 MVP image formats are PNG, JPG/JPEG, and HEIC.
 
-- macOS: manual file import plus a top-center notch-style file drop zone;
-  clipboard and menu-bar intake remain later slices.
+- macOS: manual file import, top-center notch-style file drop zone, menu-bar
+  utility, and in-memory clipboard import.
 - iOS: Share Extension and in-app image picker.
 - Android: `ACTION_SEND` share target and in-app image picker.
 
 Multiple images are not an MVP batch: process the first valid image and inform
 the user. A corrupt or unsupported image must fail validation before any cloud
-provider call or draft creation.
+provider call or draft creation. Clipboard intake accepts native PNG, JPEG,
+HEIC, or TIFF pasteboard representations, converts when necessary in memory,
+and creates no temporary screenshot file.
 
 ## Pipeline
 
@@ -38,6 +40,10 @@ unvalidated model payload to the client.
 
 Use Apple Vision OCR, deterministic layout-aware extraction, normalization,
 and review without sending the image or OCR off-device. This is the default.
+Local Only is not a language model: it uses bounded Vietnamese-English rules
+for common date, time, title, and location cues and may miss broader semantic
+context. The import screen must state that limitation and recommend explicit
+Accuracy Mode opt-in when the wording or layout is complex.
 
 ### Accuracy Mode
 

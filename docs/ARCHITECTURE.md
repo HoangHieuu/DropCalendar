@@ -2,19 +2,27 @@
 
 ## Current State
 
-The repository contains a macOS 14 SwiftUI app, XCTest target, and a loopback
-FastAPI extraction service. Local Only keeps extraction on-device. Opt-in
+The repository contains a macOS 14 SwiftUI menu-bar app, XCTest target, a
+versioned benchmark package, and a loopback FastAPI extraction service. Local
+Only keeps extraction on-device. Opt-in
 Accuracy Mode sends a bounded JPEG plus layout-aware Apple Vision OCR to the
 local service, which owns the OpenRouter credential and validates strict
-structured output from `google/gemini-3.1-flash-lite`. Drafts remain in memory.
+structured output from `google/gemini-3.1-flash-lite`. Minimized draft metadata
+persists in owner-only SQLite; full OCR and screenshots are excluded. Optional
+screenshot history is default-off and uses an AES-GCM vault whose key is in the
+macOS Keychain.
 Google desktop OAuth with PKCE uses the same loopback service for secret-bearing
-token exchange, stores its refresh token in Keychain when the build has a usable
-signed identity, and keeps Calendar REST creation behind explicit confirmation.
-There is no production deployment, database, or benchmark corpus.
+token exchange and keeps Calendar REST creation behind explicit confirmation.
+Refresh-token storage is signature-aware: team-signed builds use Data Protection
+Keychain and ad-hoc development builds use the local login Keychain.
+There is no production service deployment or server database. The checked-in
+100-image corpus is generated regression data, not a licensed real-world
+accuracy corpus.
 
 The macOS surface owns one shared `SnapCalModel`. A non-activating AppKit
 `NSPanel` hosts the SwiftUI notch drop target and forwards selected file URLs
-into that model; it does not own extraction or Calendar state.
+into that model; `MenuBarExtra`, clipboard intake, recent drafts, settings, and
+the main window use the same model and do not own extraction or Calendar state.
 
 ## First Vertical Slice
 
@@ -26,7 +34,9 @@ SwiftUI manual image import and review
   -> Local Only deterministic extraction
      or opt-in loopback FastAPI -> OpenRouter -> Gemini 3.1 Flash Lite
   -> typed event-draft result
-  -> in-memory editable review
+  -> editable review plus minimized local draft persistence
+  -> reminder suggestions, local duplicate warnings, and optional explicit
+     MapKit place candidates
   -> explicit confirmation state machine
   -> Google desktop OAuth (system browser + loopback callback + PKCE)
   -> loopback FastAPI token broker -> Google OAuth token endpoint
@@ -123,6 +133,13 @@ untrusted image
 Cloud OCR remains future infrastructure. The OpenRouter adapter enters through
 the inward-facing cloud-extraction protocol and its model remains configurable.
 
+An optional Local Semantic Mode is architecture-approved but toolchain-gated by
+decision 0016. The current macOS 15.5 SDK cannot import Apple's Foundation
+Models framework, so deterministic Local Only remains the only on-device mode.
+A future adapter must preserve macOS 14 compatibility, check system-model
+availability, fall back only to deterministic Local Only, and pass separate
+benchmark gates before becoming user-visible.
+
 Models propose fields; deterministic code validates dates, timezones, reminder
 limits, and state transitions. Provider confidence is evidence, not authority.
 
@@ -141,13 +158,18 @@ Parse and validate all unknown data at entry:
 ## Persistence And Secrets
 
 - SQLite stores local draft metadata first.
-- Keychain stores OAuth credentials on Apple platforms. An unsigned local build
-  may use the current access token even when refresh-token persistence is
-  unavailable; it must request consent again after that in-memory token expires
-  or the app restarts.
+- SQLite schema version 2 stores minimized review/lifecycle data and source
+  fingerprints, with a transactional version-1 migration. It excludes image
+  bytes and the full OCR transcript.
+- Keychain stores the OAuth refresh token on Apple platforms. Team-signed builds
+  prefer Data Protection Keychain; ad-hoc development builds use the encrypted
+  local login Keychain. Reads check the alternate backend during signing
+  transitions, and Disconnect deletes both. Access tokens remain in memory.
 - PostgreSQL is deferred until a server-owned metadata need is proven.
-- Object storage is prohibited by default and requires opt-in screenshot
-  history plus a retention/deletion design.
+- Screenshot history is disabled by default. If explicitly enabled, app-owned
+  image copies use an AES-GCM local vault and a Keychain key. Clear All removes
+  draft rows, vault files, and that key; user originals are outside SnapCal's
+  deletion scope.
 - Credentials never enter source control, screenshots, traces, fixtures, or
   application logs.
 
@@ -168,10 +190,10 @@ retention records and operational logs remain separate concerns.
 5. Curated benchmark evaluation for extraction accuracy and latency.
 6. End-to-end proof that no calendar write occurs before user confirmation.
 
-## Decisions Required Before Implementation
+## Remaining Decisions
 
 - Production hosting and secret-management boundary if Accuracy Mode moves
   beyond the current loopback development service.
 - Versioned event-draft schema transport.
-- Benchmark asset licensing and private-data sanitization.
+- Real-world benchmark asset licensing and private-data sanitization.
 - Whether any server-owned metadata requires PostgreSQL; default is no.

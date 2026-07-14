@@ -39,6 +39,13 @@ client secret is copied into source or the app bundle. Broker configuration,
 client mismatch, and provider rejection are separate redacted recoverable
 errors.
 
+The refresh token is the only persisted OAuth credential. SnapCal selects its
+Keychain backend from the running code signature: Apple team-signed builds use
+Data Protection Keychain, while ad-hoc local builds use the user's encrypted
+login Keychain. Reads check both stores during a signing transition, successful
+saves remove a stale alternate copy, and Disconnect deletes both. Access tokens
+remain memory-only and no token value enters logs or UI state.
+
 ## Reminder Rules
 
 - Generic: 1 day and 1 hour before.
@@ -48,7 +55,11 @@ errors.
 - All-day: 1 day before in the morning.
 
 Google reminder limits are a provider validation concern; the review must block
-an invalid override count before submission.
+an invalid override count before submission. SnapCal currently supports popup
+and email reminder values in the domain, exposes popup choices in review,
+validates zero through 40,320 minutes, and maps at most five reviewed overrides
+into the Calendar request. Learning a user's default reminder preferences
+remains Phase 6.
 
 ## Location Rules
 
@@ -57,12 +68,22 @@ unknown. Preserve raw text when resolution fails. Multiple map candidates need
 user choice. An inferred place is visibly inferred. Online meeting information
 belongs in the description while the location is presented as Online.
 
+Place lookup is never automatic. The user explicitly chooses Find with Apple
+Maps after seeing that the query is sent to Apple Maps. Up to five candidates
+are returned; selecting one becomes a user edit. Search failure preserves the
+original location and does not block an otherwise valid event.
+
 ## Duplicate Warnings
 
 MVP signals are screenshot hash, title/date/time, title/date/location, recent
 drafts, and recently created SnapCal events. Duplicate warnings are overridable
 and never silently suppress creation. Reading broader calendar history is a
 later explicit permission.
+
+Current detection is local-only: exact screenshot fingerprint and normalized
+title/start matches are high-confidence warnings; same title/day/location is a
+soft warning. Warning override still enters the normal separate Calendar
+confirmation state, so it never creates an event directly.
 
 ## State Machine
 

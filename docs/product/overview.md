@@ -56,13 +56,14 @@ capture or receive screenshot
 4. OCR/vision disagreement on a critical field becomes an ambiguity; it is not
    resolved silently.
 5. A screenshot with no event evidence returns `No event detected`.
-6. Raw screenshots are deleted by default after successful extraction.
+6. SnapCal retains no app-owned raw screenshot copy by default; it never
+   deletes or changes the user's original file.
 
 ## MVP Definition
 
 The MVP is complete when macOS accepts an image by drag/drop or clipboard,
 extracts Vietnamese and English event details, opens an editable review,
 highlights uncertainty, creates a Google Calendar event after confirmation,
-adds valid reminders, preserves local drafts, warns on duplicates, deletes raw
-screenshots by default, and reports Vietnamese and English benchmark results
-separately.
+adds valid reminders, preserves local drafts, warns on duplicates, retains no
+raw screenshot copy by default, and reports Vietnamese and English benchmark
+results separately.
