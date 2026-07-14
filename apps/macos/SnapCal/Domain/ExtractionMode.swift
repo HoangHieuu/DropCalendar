@@ -16,7 +16,7 @@ enum ExtractionMode: String, CaseIterable, Identifiable {
 
 enum ExtractionNotice: Equatable {
     case local
-    case gemini(model: String)
+    case openRouter(model: String)
     case localFallback(reason: String)
 }
 
@@ -65,7 +65,7 @@ enum CloudExtractionError: LocalizedError, Equatable {
         case .unavailable:
             return "Accuracy Mode is temporarily unavailable."
         case .rejected:
-            return "Gemini could not process this poster."
+            return "OpenRouter could not process this poster."
         case .invalidResponse:
             return "Accuracy Mode returned an invalid event proposal."
         case .noEventDetected:

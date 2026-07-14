@@ -75,7 +75,7 @@ struct ImportView: View {
         case .localOnly:
             return "Uses Apple Vision on this Mac. Your image does not leave the device."
         case .accuracy:
-            return "Sends the image and recognized text to your SnapCal service and Google Gemini for a more accurate draft."
+            return "Sends the image and recognized text to your SnapCal service and OpenRouter for a more accurate draft."
         }
     }
 
@@ -88,7 +88,7 @@ struct ImportView: View {
         case .localOnly:
             return "Local Only — no image is uploaded, saved, or added to a calendar."
         case .accuracy:
-            return "Accuracy Mode is opt-in. The extraction service requests no provider-side storage; nothing is added to a calendar until you confirm."
+            return "Accuracy Mode is opt-in. SnapCal's local service does not persist the image; nothing is added to a calendar until you confirm."
         }
     }
 }
@@ -106,7 +106,7 @@ struct ProcessingView: View {
             Text(fileName)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Text(mode == .localOnly ? "Processing on this Mac" : "Using Gemini Accuracy Mode")
+            Text(mode == .localOnly ? "Processing on this Mac" : "Using OpenRouter Accuracy Mode")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

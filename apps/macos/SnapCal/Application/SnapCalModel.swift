@@ -69,7 +69,7 @@ final class SnapCalModel {
             validator: ImageValidator(),
             ocrService: VisionOCRService(),
             extractor: LocalEventExtractor(),
-            cloudExtractor: GeminiExtractionClient.live(),
+            cloudExtractor: AccuracyExtractionClient.live(),
             calendarScheduler: GoogleCalendarScheduler.live()
         )
     }
@@ -118,7 +118,7 @@ final class SnapCalModel {
                         sourceFileName: image.fileName
                     )
                     draft = reconcile(cloud: result.draft, local: localCandidate)
-                    extractionNotice = .gemini(model: result.model)
+                    extractionNotice = .openRouter(model: result.model)
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
@@ -223,7 +223,7 @@ final class SnapCalModel {
            !Calendar.current.isDate(cloudStart, inSameDayAs: localStart) {
             result.ambiguities.append(DraftAmbiguity(
                 field: .dateTime,
-                message: "Gemini and on-device extraction found different dates. Verify the poster before creating the event.",
+                message: "OpenRouter and on-device extraction found different dates. Verify the poster before creating the event.",
                 severity: .high
             ))
             result.start.confidence = min(result.start.confidence, 0.49)
@@ -234,7 +234,7 @@ final class SnapCalModel {
            normalized(cloudLocation) != normalized(localLocation) {
             result.ambiguities.append(DraftAmbiguity(
                 field: .location,
-                message: "Gemini and on-device extraction found different locations. Review the location.",
+                message: "OpenRouter and on-device extraction found different locations. Review the location.",
                 severity: .medium
             ))
             result.location.confidence = min(result.location.confidence, 0.69)

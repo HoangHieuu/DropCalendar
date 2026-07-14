@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-struct GeminiExtractionClient: CloudEventExtracting {
+struct AccuracyExtractionClient: CloudEventExtracting {
     private struct Request: Encodable {
         let schemaVersion = "1"
         let imageBase64: String
@@ -118,7 +118,7 @@ struct GeminiExtractionClient: CloudEventExtracting {
         let baseURL = configured.flatMap(URL.init(string:))
             ?? URL(string: "http://127.0.0.1:8765")!
         guard let endpoint = URL(string: "/v1/extract", relativeTo: baseURL)?.absoluteURL,
-              let client = try? GeminiExtractionClient(endpoint: endpoint) else {
+              let client = try? AccuracyExtractionClient(endpoint: endpoint) else {
             return DisabledCloudEventExtractor()
         }
         return client
