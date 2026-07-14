@@ -29,6 +29,16 @@ struct NotchPanelLayout {
     }
 }
 
+struct NotchHoverExitPolicy {
+    static let edgeTolerance: CGFloat = 6
+
+    static func containsPointer(_ location: CGPoint, in panelFrame: CGRect) -> Bool {
+        panelFrame
+            .insetBy(dx: -edgeTolerance, dy: -edgeTolerance)
+            .contains(location)
+    }
+}
+
 enum NotchDropSelectionError: Error, Equatable {
     case empty
     case unsupported
@@ -74,19 +84,20 @@ struct NotchDropImporter {
 private final class NotchDropPresentation {
     var message: String?
     var isPinned = false
+    var isHovering = false
 }
 
 private struct NotchDropZoneView: View {
     let model: SnapCalModel
     let presentation: NotchDropPresentation
+    let onHoverChanged: (Bool) -> Void
     let onExpansionChanged: (Bool) -> Void
     let onDrop: ([URL]) -> Void
 
-    @State private var isHovering = false
     @State private var isDropTargeted = false
 
     private var isExpanded: Bool {
-        isHovering || isDropTargeted || presentation.isPinned
+        presentation.isHovering || isDropTargeted || presentation.isPinned
     }
 
     private var accent: Color {
@@ -111,7 +122,7 @@ private struct NotchDropZoneView: View {
             }
         }
         .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
+        .onHover(perform: onHoverChanged)
         .dropDestination(
             for: URL.self,
             action: { urls, _ in
@@ -191,6 +202,10 @@ final class NotchPanelController: NSWindowController {
     private var isExpanded = false
     private var screenObserver: NSObjectProtocol?
     private var statusTask: Task<Void, Never>?
+    private var hoverExitTask: Task<Void, Never>?
+
+    private static let hoverExitDelayNanoseconds: UInt64 = 140_000_000
+    private static let hoverExitPollNanoseconds: UInt64 = 80_000_000
 
     init(model: SnapCalModel, reopenMainWindow: @escaping () -> Void) {
         self.model = model
@@ -220,6 +235,7 @@ final class NotchPanelController: NSWindowController {
         panel.contentView = NSHostingView(rootView: NotchDropZoneView(
             model: model,
             presentation: presentation,
+            onHoverChanged: { [weak self] in self?.handleHoverChanged($0) },
             onExpansionChanged: { [weak self] in self?.setExpanded($0, animated: true) },
             onDrop: { [weak self] in self?.handleDrop(urls: $0) }
         ))
@@ -241,6 +257,7 @@ final class NotchPanelController: NSWindowController {
 
     deinit {
         statusTask?.cancel()
+        hoverExitTask?.cancel()
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
         }
@@ -255,6 +272,37 @@ final class NotchPanelController: NSWindowController {
         guard isExpanded != expanded else { return }
         isExpanded = expanded
         reposition(animated: animated)
+    }
+
+    private func handleHoverChanged(_ isHovering: Bool) {
+        hoverExitTask?.cancel()
+
+        guard !isHovering else {
+            presentation.isHovering = true
+            return
+        }
+
+        hoverExitTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.hoverExitDelayNanoseconds)
+                guard let self else { return }
+
+                while self.isPointerOverPanel {
+                    try await Task.sleep(nanoseconds: Self.hoverExitPollNanoseconds)
+                }
+                presentation.isHovering = false
+            } catch {
+                return
+            }
+        }
+    }
+
+    private var isPointerOverPanel: Bool {
+        guard let panelFrame = window?.frame else { return false }
+        return NotchHoverExitPolicy.containsPointer(
+            NSEvent.mouseLocation,
+            in: panelFrame
+        )
     }
 
     private func reposition(animated: Bool) {
