@@ -4,7 +4,7 @@ Date: 2026-07-13
 
 ## Status
 
-Accepted
+Superseded by `0012-openrouter-accuracy-provider`
 
 ## Context
 

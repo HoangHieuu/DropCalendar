@@ -5,8 +5,8 @@
 The repository contains a macOS 14 SwiftUI app, XCTest target, and a loopback
 FastAPI extraction service. Local Only keeps extraction on-device. Opt-in
 Accuracy Mode sends a bounded JPEG plus layout-aware Apple Vision OCR to the
-local service, which owns the Gemini credential and validates strict Gemini
-2.5 Flash structured output. Drafts remain in memory. Google desktop OAuth with
+local service, which owns the OpenRouter credential and validates strict
+structured output from `google/gemini-3.1-flash-lite`. Drafts remain in memory. Google desktop OAuth with
 PKCE stores its refresh token in Keychain and Calendar REST creation remains
 behind explicit confirmation. There is no production deployment, database, or
 benchmark corpus.
@@ -19,7 +19,7 @@ The initial implementation target is macOS-first:
 SwiftUI manual image import and review
   -> Apple Vision local OCR
   -> Local Only deterministic extraction
-     or opt-in loopback FastAPI -> Gemini 2.5 Flash
+     or opt-in loopback FastAPI -> OpenRouter -> Gemini 3.1 Flash Lite
   -> typed event-draft result
   -> in-memory editable review
   -> explicit confirmation state machine
@@ -27,7 +27,7 @@ SwiftUI manual image import and review
   -> Google Calendar REST events.insert
 ```
 
-FastAPI and Gemini structured extraction are now implemented for local
+FastAPI and OpenRouter structured extraction are now implemented for local
 development. Google Cloud Vision OCR fallback and Google Places/Geocoding
 remain deferred target choices.
 
@@ -104,7 +104,7 @@ untrusted image
   -> deterministic local candidate with layout boxes
   -> Local Only returns the local candidate, or
   -> Accuracy Mode sends image + OCR to 127.0.0.1 proxy
-  -> proxy calls Gemini 2.5 Flash with store=false
+  -> proxy calls OpenRouter Chat Completions with a strict JSON Schema
   -> strict versioned proposal validation and local/cloud disagreement checks
   -> normalization and deterministic consistency checks
   -> confidence and ambiguity rules
@@ -112,8 +112,8 @@ untrusted image
   -> mandatory review
 ```
 
-Cloud OCR remains future infrastructure. The Gemini adapter enters through the
-inward-facing cloud-extraction protocol and is replaceable.
+Cloud OCR remains future infrastructure. The OpenRouter adapter enters through
+the inward-facing cloud-extraction protocol and its model remains configurable.
 
 Models propose fields; deterministic code validates dates, timezones, reminder
 limits, and state transitions. Provider confidence is evidence, not authority.

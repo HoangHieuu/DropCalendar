@@ -16,14 +16,15 @@ Screenshot
 
 ## Current State
 
-The macOS vertical slice, guarded Google Calendar boundary, and opt-in Gemini
+The macOS vertical slice, guarded Google Calendar boundary, and opt-in OpenRouter
 Accuracy Mode are implemented. `SnapCal.xcodeproj` validates a selected PNG,
 JPEG, or HEIC, runs Vietnamese-English Apple Vision OCR, derives an
 evidence-bearing typed draft, presents an editable review, and creates a Google
 Calendar event only after a separate confirmation dialog. Local Only is the
 default and makes no cloud extraction call. Accuracy Mode sends the image and
-layout-aware OCR to a loopback FastAPI proxy, which keeps the Gemini credential
-out of the app and validates Gemini 2.5 Flash structured output. Images and
+layout-aware OCR to a loopback FastAPI proxy, which keeps the OpenRouter
+credential out of the app and validates strict structured output from
+`google/gemini-3.1-flash-lite`. Images and
 drafts remain in memory. The Google refresh token is the only persisted value
 and is stored in macOS Keychain.
 
@@ -40,10 +41,12 @@ OAuth test user is required for the live Calendar flow. The downloaded desktop
 credential JSON stays outside this repository; the app embeds only its public
 OAuth client ID and never embeds or reads the client secret.
 
-Accuracy Mode requires a separate Gemini authorization key. Do not use the
-Google Calendar OAuth JSON for this. Create the local service once:
+Accuracy Mode requires an OpenRouter API key. Do not use the Google Calendar
+OAuth JSON for this. Create the local service and private environment file once:
 
 ```bash
+cp .env.example .env
+# Edit .env and replace the OPENROUTER_API_KEY placeholder with your key.
 python3 -m venv .venv
 .venv/bin/python -m pip install -r services/extraction-api/requirements.txt
 ```
@@ -51,12 +54,12 @@ python3 -m venv .venv
 Then start it in a separate Terminal window before selecting Accuracy Mode:
 
 ```bash
-export GEMINI_API_KEY='your-dedicated-gemini-key'
 scripts/run-extraction-api.sh
 ```
 
-The default service is bound only to `127.0.0.1:8765`. The model can be changed
-with `SNAPCAL_GEMINI_MODEL`; the current default is `gemini-2.5-flash`.
+The service automatically loads the repository-root `.env` and binds only to
+`127.0.0.1:8765` by default. The model can be changed with
+`OPENROUTER_MODEL`; the default is `google/gemini-3.1-flash-lite`.
 
 Run the complete test target from Terminal with:
 
@@ -130,7 +133,7 @@ and do not initialize or mutate Harness state.
 ## What Is Deliberately Not Here Yet
 
 There is no production backend deployment, database schema, benchmark corpus,
-mobile app, or CI workflow. Live Gemini extraction still requires a dedicated
-key and one user-driven poster proof. The live Google OAuth/create path also
+mobile app, or CI workflow. Live OpenRouter extraction still requires a funded
+user-owned key and one user-driven poster proof. The live Google OAuth/create path also
 requires a user-driven platform proof because SnapCal must never consent or
 create an event on the user's behalf.

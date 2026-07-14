@@ -41,8 +41,9 @@ and review without sending the image or OCR off-device. This is the default.
 ### Accuracy Mode
 
 The user explicitly opts in before import. Send a bounded image plus local OCR
-and normalized layout boxes to the loopback extraction service. Gemini 2.5
-Flash proposes a strict evidence-bearing event. If it is unavailable or invalid,
+and normalized layout boxes to the loopback extraction service. OpenRouter routes
+the request to `google/gemini-3.1-flash-lite`, which proposes a strict
+evidence-bearing event. If it is unavailable or invalid,
 fall back visibly to the deterministic local candidate. Cloud OCR is not part
 of this slice.
 
@@ -51,9 +52,10 @@ of this slice.
 - Apple Vision is the preferred local OCR pre-pass on macOS/iOS.
 - Cloud OCR is a replaceable port; Google Cloud Vision is the initial candidate
   because Vietnamese is a required language.
-- Gemini 2.5 Flash is the initial vision-language adapter behind a replaceable
-  port and strict versioned schema; it is not a domain dependency.
-- The Gemini key belongs only to the FastAPI process environment. The macOS app
+- OpenRouter Chat Completions is the initial vision-language adapter behind a
+  replaceable port and strict versioned schema; the default model is
+  `google/gemini-3.1-flash-lite` and neither is a domain dependency.
+- The OpenRouter key belongs only to the FastAPI process environment. The macOS app
   sends no provider credential and accepts only HTTPS or loopback HTTP service
   addresses.
 - Provider output is untrusted boundary data and must be parsed before entering

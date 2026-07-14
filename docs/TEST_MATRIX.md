@@ -55,8 +55,10 @@ responses, recoverable errors, and the rule that request/cancel paths make zero
 provider calls while confirmation makes exactly one. US-003 adds layout-aware
 OCR, all-day range semantics, opt-in Gemini proxy contracts, strict response
 validation, visible fallback, and executable proof that Local Only makes zero
-cloud calls and the client contains no provider credential. The macOS target
-builds and all 30 XCTest cases pass; the FastAPI suite adds 5 passing contract
-tests and its loopback health endpoint is proven. Live Gemini output, browser
+cloud calls and the client contains no provider credential. US-004 replaces the
+direct provider adapter with OpenRouter, uses strict JSON Schema output, keeps
+Bearer authorization server-side, redacts upstream failures, and defaults to
+`google/gemini-3.1-flash-lite`. The macOS target builds and all 30 XCTest cases
+pass; the FastAPI suite adds 11 passing contract tests. Live OpenRouter output, browser
 consent, Keychain, and one confirmed Calendar event remain user-driven proofs;
 deletion and the benchmark gates remain unimplemented.
