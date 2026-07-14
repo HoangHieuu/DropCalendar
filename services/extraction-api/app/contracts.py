@@ -6,12 +6,14 @@ from datetime import date as DateValue
 from datetime import datetime
 from datetime import time as TimeValue
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
 MAX_IMAGE_BYTES = 20 * 1_024 * 1_024
 ContractString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+OAuthString = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4_096)]
 
 
 class OCRBox(BaseModel):
@@ -152,3 +154,54 @@ class HealthResponse(BaseModel):
     provider: Literal["openrouter"] = "openrouter"
     model: str
     ready: bool
+
+
+class OAuthTokenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    grant_type: Literal["authorization_code", "refresh_token"]
+    code: OAuthString | None = None
+    code_verifier: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=43, max_length=128),
+    ] | None = None
+    redirect_uri: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=500),
+    ] | None = None
+    refresh_token: OAuthString | None = None
+
+    @model_validator(mode="after")
+    def validates_grant(self) -> "OAuthTokenRequest":
+        if self.grant_type == "authorization_code":
+            if not self.code or not self.code_verifier or not self.redirect_uri:
+                raise ValueError("authorization_code requires code, code_verifier, and redirect_uri")
+            if self.refresh_token is not None:
+                raise ValueError("authorization_code cannot include refresh_token")
+            parsed = urlparse(self.redirect_uri)
+            if (
+                parsed.scheme != "http"
+                or parsed.hostname != "127.0.0.1"
+                or parsed.port is None
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.query
+                or parsed.fragment
+                or parsed.path not in ("", "/")
+            ):
+                raise ValueError("redirect_uri must be a loopback IPv4 callback")
+        else:
+            if not self.refresh_token:
+                raise ValueError("refresh_token grant requires refresh_token")
+            if self.code is not None or self.code_verifier is not None or self.redirect_uri is not None:
+                raise ValueError("refresh_token grant cannot include authorization-code fields")
+        return self
+
+
+class OAuthTokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    access_token: OAuthString
+    expires_in: float = Field(gt=0, le=86_400)
+    refresh_token: OAuthString | None = None

@@ -5,10 +5,25 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-from .contracts import ExtractionRequest, ExtractionResponse, HealthResponse
+from .contracts import (
+    ExtractionRequest,
+    ExtractionResponse,
+    HealthResponse,
+    OAuthTokenRequest,
+    OAuthTokenResponse,
+)
+from .oauth_broker import (
+    GoogleOAuthTokenBroker,
+    OAuthBrokerUnavailableError,
+    OAuthClientMismatchError,
+    OAuthProviderRejectedError,
+    OAuthTokenBroker,
+    UnavailableOAuthTokenBroker,
+)
 from .provider import (
     ExtractionProvider,
     InvalidProviderOutputError,
@@ -43,8 +58,22 @@ def configured_provider() -> ExtractionProvider:
         return UnavailableOpenRouterProvider(model=model)
 
 
-def create_app(provider: ExtractionProvider | None = None) -> FastAPI:
+def configured_oauth_broker() -> OAuthTokenBroker:
+    credential_path = os.environ.get("GOOGLE_OAUTH_CREDENTIALS_FILE", "").strip()
+    if not credential_path:
+        return UnavailableOAuthTokenBroker()
+    try:
+        return GoogleOAuthTokenBroker(Path(credential_path))
+    except OAuthBrokerUnavailableError:
+        return UnavailableOAuthTokenBroker()
+
+
+def create_app(
+    provider: ExtractionProvider | None = None,
+    oauth_broker: OAuthTokenBroker | None = None,
+) -> FastAPI:
     selected_provider = provider or configured_provider()
+    selected_oauth_broker = oauth_broker or configured_oauth_broker()
     app = FastAPI(
         title="SnapCal Extraction API",
         version="0.1.0",
@@ -78,11 +107,47 @@ def create_app(provider: ExtractionProvider | None = None) -> FastAPI:
                 detail={"code": "invalid_provider_output", "message": "OpenRouter returned an invalid event proposal."},
             ) from None
 
+    @app.post("/v1/google-oauth/token", response_model=OAuthTokenResponse)
+    async def exchange_google_oauth_token(request: OAuthTokenRequest) -> OAuthTokenResponse:
+        try:
+            return await selected_oauth_broker.exchange(request)
+        except OAuthBrokerUnavailableError:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "oauth_broker_unavailable",
+                    "message": "Google OAuth helper is not configured.",
+                },
+            ) from None
+        except OAuthClientMismatchError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "oauth_client_mismatch",
+                    "message": "Google OAuth credentials do not match SnapCal.",
+                },
+            ) from None
+        except OAuthProviderRejectedError:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "oauth_exchange_rejected",
+                    "message": "Google could not complete the OAuth token exchange.",
+                },
+            ) from None
+
     @app.exception_handler(ValueError)
     async def value_error_handler(_: Any, __: ValueError) -> JSONResponse:
         return JSONResponse(
             status_code=422,
             content={"detail": {"code": "invalid_request", "message": "The extraction request is invalid."}},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(_: Any, __: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": {"code": "invalid_request", "message": "The request is invalid."}},
         )
 
     return app

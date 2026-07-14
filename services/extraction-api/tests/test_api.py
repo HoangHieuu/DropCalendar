@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.contracts import EventProposal, ExtractionRequest
 from app.main import create_app
+from app.oauth_broker import OAuthBrokerUnavailableError, OAuthClientMismatchError
 from app.provider import InvalidProviderOutputError, ProviderUnavailableError
 
 
@@ -95,6 +96,20 @@ class FailingProvider:
         raise self.error
 
 
+@dataclass
+class FakeOAuthBroker:
+    error: Exception | None = None
+
+    async def exchange(self, request):
+        if self.error:
+            raise self.error
+        return {
+            "access_token": "broker-access-token",
+            "expires_in": 3_600,
+            "refresh_token": "broker-refresh-token",
+        }
+
+
 def test_health_discloses_readiness_without_credentials() -> None:
     provider = FakeProvider(valid_proposal())
     response = TestClient(create_app(provider)).get("/health")
@@ -166,3 +181,70 @@ def test_contract_rejects_invented_date_evidence_and_reversed_range() -> None:
         assert "cannot precede start" in str(error)
     else:
         raise AssertionError("Expected reversed range to fail")
+
+
+def test_oauth_token_endpoint_returns_only_bounded_token_fields() -> None:
+    client = TestClient(create_app(FakeProvider(valid_proposal()), FakeOAuthBroker()))
+    response = client.post(
+        "/v1/google-oauth/token",
+        json={
+            "client_id": "desktop-client-id",
+            "grant_type": "authorization_code",
+            "code": "authorization-code",
+            "code_verifier": "v" * 43,
+            "redirect_uri": "http://127.0.0.1:49152",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "access_token": "broker-access-token",
+        "expires_in": 3_600.0,
+        "refresh_token": "broker-refresh-token",
+    }
+    assert "client_secret" not in response.text
+
+
+def test_oauth_token_endpoint_rejects_non_loopback_redirect_and_redacts_failures() -> None:
+    provider = FakeProvider(valid_proposal())
+    client = TestClient(create_app(provider, FakeOAuthBroker()))
+    payload = {
+        "client_id": "desktop-client-id",
+        "grant_type": "authorization_code",
+        "code": "private-authorization-code",
+        "code_verifier": "v" * 43,
+        "redirect_uri": "https://attacker.example/callback",
+    }
+    response = client.post("/v1/google-oauth/token", json=payload)
+    assert response.status_code == 422
+    assert "private-authorization-code" not in response.text
+
+    unavailable = TestClient(create_app(provider, FakeOAuthBroker(
+        OAuthBrokerUnavailableError("private credential path")
+    )))
+    response = unavailable.post(
+        "/v1/google-oauth/token",
+        json={
+            "client_id": "desktop-client-id",
+            "grant_type": "refresh_token",
+            "refresh_token": "private-refresh-token",
+        },
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "oauth_broker_unavailable"
+    assert "private" not in response.text
+
+    mismatch = TestClient(create_app(provider, FakeOAuthBroker(
+        OAuthClientMismatchError("private client metadata")
+    )))
+    response = mismatch.post(
+        "/v1/google-oauth/token",
+        json={
+            "client_id": "desktop-client-id",
+            "grant_type": "refresh_token",
+            "refresh_token": "private-refresh-token",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "oauth_client_mismatch"
+    assert "private-refresh-token" not in response.text
