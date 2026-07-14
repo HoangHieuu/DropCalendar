@@ -74,6 +74,7 @@ struct EventDraft: Identifiable, Equatable {
     let createdAt: Date
     let capturedAt: Date
     let sourceFileName: String
+    var sourceFingerprint: String?
     let detectedLanguage: DraftLanguage
     let rawOCRText: String
 
@@ -82,6 +83,7 @@ struct EventDraft: Identifiable, Equatable {
     var end: ExtractedField<Date>
     var location: ExtractedField<String>
     var description: ExtractedField<String>
+    var reminders: [EventReminder]
     var isAllDay: Bool
     var ambiguities: [DraftAmbiguity]
     let requiresUserConfirmation: Bool
@@ -91,6 +93,7 @@ struct EventDraft: Identifiable, Equatable {
         createdAt: Date = Date(),
         capturedAt: Date,
         sourceFileName: String,
+        sourceFingerprint: String? = nil,
         detectedLanguage: DraftLanguage,
         rawOCRText: String,
         title: ExtractedField<String>,
@@ -98,6 +101,7 @@ struct EventDraft: Identifiable, Equatable {
         end: ExtractedField<Date>,
         location: ExtractedField<String>,
         description: ExtractedField<String>,
+        reminders: [EventReminder] = [],
         isAllDay: Bool = false,
         ambiguities: [DraftAmbiguity],
         requiresUserConfirmation: Bool = true
@@ -106,6 +110,7 @@ struct EventDraft: Identifiable, Equatable {
         self.createdAt = createdAt
         self.capturedAt = capturedAt
         self.sourceFileName = sourceFileName
+        self.sourceFingerprint = sourceFingerprint
         self.detectedLanguage = detectedLanguage
         self.rawOCRText = rawOCRText
         self.title = title
@@ -113,6 +118,7 @@ struct EventDraft: Identifiable, Equatable {
         self.end = end
         self.location = location
         self.description = description
+        self.reminders = reminders
         self.isAllDay = isAllDay
         self.ambiguities = ambiguities
         self.requiresUserConfirmation = requiresUserConfirmation

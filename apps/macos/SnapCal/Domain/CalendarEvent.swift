@@ -91,6 +91,21 @@ struct CalendarEventRequest: Equatable {
     let location: String?
     let description: String?
     let timing: Timing
+    let reminders: [EventReminder]
+
+    init(
+        summary: String,
+        location: String?,
+        description: String?,
+        timing: Timing,
+        reminders: [EventReminder] = []
+    ) {
+        self.summary = summary
+        self.location = location
+        self.description = description
+        self.timing = timing
+        self.reminders = reminders
+    }
 }
 
 enum CalendarEventMapper {
@@ -112,6 +127,21 @@ enum CalendarEventMapper {
         guard draft.isAllDay ? end >= start : end > start else {
             throw GoogleCalendarError.invalidDraft("Choose an end after the event start.")
         }
+        do {
+            try ReminderPolicy.validate(draft.reminders)
+        } catch ReminderValidationError.tooMany {
+            throw GoogleCalendarError.invalidDraft(
+                "Google Calendar allows at most five reminder overrides. Remove a reminder before creating the event."
+            )
+        } catch ReminderValidationError.outOfRange {
+            throw GoogleCalendarError.invalidDraft(
+                "Choose reminders between the event time and four weeks before it."
+            )
+        } catch {
+            throw GoogleCalendarError.invalidDraft(
+                "Remove duplicate reminder choices before creating the event."
+            )
+        }
 
         let timing: CalendarEventRequest.Timing
         if draft.isAllDay {
@@ -130,7 +160,8 @@ enum CalendarEventMapper {
             summary: summary,
             location: nonEmpty(draft.location.value),
             description: nonEmpty(draft.description.value),
-            timing: timing
+            timing: timing,
+            reminders: draft.reminders
         )
     }
 

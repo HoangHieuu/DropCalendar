@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ImageIO
 
@@ -6,10 +7,27 @@ struct ValidatedImage {
     let cgImage: CGImage
     let fileName: String
     let capturedAt: Date
+    let originalData: Data?
+    let sourceFingerprint: String?
+
+    init(
+        cgImage: CGImage,
+        fileName: String,
+        capturedAt: Date,
+        originalData: Data? = nil,
+        sourceFingerprint: String? = nil
+    ) {
+        self.cgImage = cgImage
+        self.fileName = fileName
+        self.capturedAt = capturedAt
+        self.originalData = originalData
+        self.sourceFingerprint = sourceFingerprint
+    }
 }
 
 protocol ImageValidating {
     func validate(_ url: URL) throws -> ValidatedImage
+    func validate(_ clipboardImage: ClipboardImage) throws -> ValidatedImage
 }
 
 enum ImageValidationError: LocalizedError, Equatable {
@@ -58,6 +76,32 @@ struct ImageValidator: ImageValidating {
             throw ImageValidationError.unreadableFile
         }
 
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+        return try validate(
+            data: data,
+            fileName: url.lastPathComponent,
+            capturedAt: values?.contentModificationDate ?? Date()
+        )
+    }
+
+    func validate(_ clipboardImage: ClipboardImage) throws -> ValidatedImage {
+        guard allowedExtensions.contains(
+            URL(fileURLWithPath: clipboardImage.fileName).pathExtension.lowercased()
+        ) else {
+            throw ImageValidationError.unsupportedFormat
+        }
+        return try validate(
+            data: clipboardImage.data,
+            fileName: clipboardImage.fileName,
+            capturedAt: clipboardImage.capturedAt
+        )
+    }
+
+    private func validate(
+        data: Data,
+        fileName: String,
+        capturedAt: Date
+    ) throws -> ValidatedImage {
         guard !data.isEmpty else {
             throw ImageValidationError.emptyFile
         }
@@ -72,11 +116,14 @@ struct ImageValidator: ImageValidating {
             throw ImageValidationError.corruptImage
         }
 
-        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
         return ValidatedImage(
             cgImage: image,
-            fileName: url.lastPathComponent,
-            capturedAt: values?.contentModificationDate ?? Date()
+            fileName: fileName,
+            capturedAt: capturedAt,
+            originalData: data,
+            sourceFingerprint: SHA256.hash(data: data)
+                .map { String(format: "%02x", $0) }
+                .joined()
         )
     }
 }

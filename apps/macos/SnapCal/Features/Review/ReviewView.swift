@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ReviewView: View {
@@ -17,8 +18,29 @@ struct ReviewView: View {
                     if !draft.ambiguities.isEmpty {
                         ambiguityPanel
                     }
+                    if !model.duplicateWarnings.isEmpty {
+                        duplicatePanel
+                    }
                     eventDetails
+                    reminderPanel
+                    locationResolutionPanel
                     evidencePanel
+                    if let historyIssue = model.draftHistoryIssue {
+                        statusBox(
+                            title: "Local history unavailable",
+                            message: historyIssue,
+                            systemImage: "externaldrive.badge.exclamationmark",
+                            color: .orange
+                        )
+                    }
+                    if let privacyIssue = model.privacyIssue {
+                        statusBox(
+                            title: "Screenshot history unavailable",
+                            message: privacyIssue,
+                            systemImage: "lock.trianglebadge.exclamationmark",
+                            color: .orange
+                        )
+                    }
                     calendarStatusPanel
                 }
                 .padding(24)
@@ -219,6 +241,130 @@ struct ReviewView: View {
         }
     }
 
+    private var duplicatePanel: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Possible duplicate", systemImage: "rectangle.on.rectangle.badge.exclamationmark")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                ForEach(model.duplicateWarnings) { warning in
+                    Text(warning.message)
+                        .font(.callout)
+                }
+                Text("You may continue, but the confirmation step will repeat this warning before any Calendar write.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+        }
+        .accessibilityIdentifier("duplicateWarningPanel")
+    }
+
+    private var reminderPanel: some View {
+        GroupBox("Reminders") {
+            VStack(alignment: .leading, spacing: 12) {
+                if draft.reminders.isEmpty {
+                    Text("No reminder overrides selected.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(draft.reminders) { reminder in
+                        HStack {
+                            Image(systemName: reminder.method == .popup ? "bell" : "envelope")
+                            Text(ReminderPolicy.label(
+                                for: reminder.minutesBefore,
+                                allDay: draft.isAllDay
+                            ))
+                            Spacer()
+                            Button {
+                                model.toggleReminder(minutesBefore: reminder.minutesBefore)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove reminder")
+                        }
+                    }
+                }
+
+                Menu("Add Reminder") {
+                    ForEach([1_440, 120, 60, 30, 15, 5, 0], id: \.self) { minutes in
+                        Button(ReminderPolicy.label(for: minutes, allDay: draft.isAllDay)) {
+                            model.toggleReminder(minutesBefore: minutes)
+                        }
+                        .disabled(draft.reminders.contains {
+                            $0.method == .popup && $0.minutesBefore == minutes
+                        })
+                    }
+                }
+                .disabled(model.isCalendarOperationInProgress)
+
+                if let issue = model.reminderIssue {
+                    Label(issue, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                Text("Google Calendar supports up to five overrides, from event time to four weeks before.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+        }
+        .accessibilityIdentifier("reminderPanel")
+    }
+
+    private var locationResolutionPanel: some View {
+        GroupBox("Location check") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(draft.location.value?.isEmpty == false
+                        ? "Keep the extracted text or look for matching places."
+                        : "Location is incomplete; event creation remains available.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if model.isResolvingLocation {
+                        ProgressView().controlSize(.small)
+                    }
+                    Button("Find Places") {
+                        Task { await model.resolveLocationCandidates() }
+                    }
+                    .disabled(
+                        model.isResolvingLocation
+                            || model.isCalendarOperationInProgress
+                            || (draft.location.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
+
+                Text("Find Places sends only the current location text to Apple Maps after you click it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let issue = model.locationResolutionIssue {
+                    Label(issue, systemImage: "mappin.slash")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+
+                ForEach(model.locationCandidates) { candidate in
+                    Button {
+                        model.selectLocationCandidate(candidate)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(candidate.name).fontWeight(.semibold)
+                            Text(candidate.address)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(12)
+        }
+        .accessibilityIdentifier("locationResolutionPanel")
+    }
+
     private var evidencePanel: some View {
         GroupBox("Extraction evidence") {
             VStack(alignment: .leading, spacing: 12) {
@@ -226,14 +372,34 @@ struct ReviewView: View {
                 evidenceRow("Start", evidence: draft.start.evidenceText)
                 evidenceRow("End", evidence: draft.end.evidenceText)
                 evidenceRow("Location", evidence: draft.location.evidenceText)
-                DisclosureGroup("Full recognized text") {
-                    Text(draft.rawOCRText)
-                        .font(.system(.callout, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 8)
+                if draft.rawOCRText.isEmpty {
+                    Label(
+                        "The full OCR transcript was not retained with this saved draft.",
+                        systemImage: "lock.shield"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                } else {
+                    DisclosureGroup("Full recognized text") {
+                        Text(draft.rawOCRText)
+                            .font(.system(.callout, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8)
+                    }
+                    .accessibilityIdentifier("ocrEvidenceDisclosure")
                 }
-                .accessibilityIdentifier("ocrEvidenceDisclosure")
+                if let data = model.screenshotPreviewData,
+                   let image = NSImage(data: data) {
+                    DisclosureGroup("Encrypted screenshot copy") {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 320)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .padding(.top, 8)
+                    }
+                }
             }
             .padding(12)
         }
@@ -404,7 +570,10 @@ struct ReviewView: View {
         let title = draft.title.value ?? "Untitled event"
         let start = (draft.start.value ?? draft.capturedAt).formatted(date: .abbreviated, time: draft.isAllDay ? .omitted : .shortened)
         let end = (draft.end.value ?? draft.capturedAt).formatted(date: .abbreviated, time: draft.isAllDay ? .omitted : .shortened)
-        return "\(title)\n\(start) – \(end)\n\nSnapCal will send these reviewed details to Google Calendar."
+        let duplicateMessage = model.duplicateWarnings.isEmpty
+            ? ""
+            : "\n\nPossible duplicate: a matching SnapCal draft already exists. Creating this event will override that warning."
+        return "\(title)\n\(start) – \(end)\(duplicateMessage)\n\nSnapCal will send these reviewed details and reminder choices to Google Calendar."
     }
 
     private var createButtonTitle: String {

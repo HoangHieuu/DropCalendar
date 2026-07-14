@@ -33,10 +33,31 @@
 		B0000000000000000000001B /* GeminiExtractionClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001B /* GeminiExtractionClientTests.swift */; };
 		B0000000000000000000001C /* NotchDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001C /* NotchDropZone.swift */; };
 		B0000000000000000000001D /* NotchDropZoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001D /* NotchDropZoneTests.swift */; };
+		B0000000000000000000001E /* ClipboardImageReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001E /* ClipboardImageReader.swift */; };
+		B0000000000000000000001F /* SnapCalMenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001F /* SnapCalMenuBarView.swift */; };
+		B00000000000000000000020 /* ClipboardImageReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000020 /* ClipboardImageReaderTests.swift */; };
+		B00000000000000000000021 /* SQLiteDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000021 /* SQLiteDraftStore.swift */; };
+		B00000000000000000000022 /* RecentDraftsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000022 /* RecentDraftsView.swift */; };
+		B00000000000000000000023 /* SQLiteDraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000023 /* SQLiteDraftStoreTests.swift */; };
+		B00000000000000000000024 /* TrustPolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000024 /* TrustPolicies.swift */; };
+		B00000000000000000000025 /* LocationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000025 /* LocationResolver.swift */; };
+		B00000000000000000000026 /* ScreenshotVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000026 /* ScreenshotVault.swift */; };
+		B00000000000000000000027 /* PrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000027 /* PrivacySettingsView.swift */; };
+		B00000000000000000000028 /* ReminderPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000028 /* ReminderPolicyTests.swift */; };
+		B00000000000000000000029 /* DuplicateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000029 /* DuplicateDetectorTests.swift */; };
+		B0000000000000000000002A /* ScreenshotVaultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002A /* ScreenshotVaultTests.swift */; };
+		B0000000000000000000002B /* SnapCalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002B /* SnapCalUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		C00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = P00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = T00000000000000000000001;
+			remoteInfo = SnapCal;
+		};
+		C00000000000000000000002 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = P00000000000000000000000 /* Project object */;
 			proxyType = 1;
@@ -75,6 +96,21 @@
 		F0000000000000000000001B /* GeminiExtractionClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiExtractionClientTests.swift; sourceTree = "<group>"; };
 		F0000000000000000000001C /* NotchDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDropZone.swift; sourceTree = "<group>"; };
 		F0000000000000000000001D /* NotchDropZoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchDropZoneTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000001E /* ClipboardImageReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageReader.swift; sourceTree = "<group>"; };
+		F0000000000000000000001F /* SnapCalMenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalMenuBarView.swift; sourceTree = "<group>"; };
+		F00000000000000000000020 /* ClipboardImageReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageReaderTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000021 /* SQLiteDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteDraftStore.swift; sourceTree = "<group>"; };
+		F00000000000000000000022 /* RecentDraftsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDraftsView.swift; sourceTree = "<group>"; };
+		F00000000000000000000023 /* SQLiteDraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteDraftStoreTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000024 /* TrustPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrustPolicies.swift; sourceTree = "<group>"; };
+		F00000000000000000000025 /* LocationResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationResolver.swift; sourceTree = "<group>"; };
+		F00000000000000000000026 /* ScreenshotVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotVault.swift; sourceTree = "<group>"; };
+		F00000000000000000000027 /* PrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacySettingsView.swift; sourceTree = "<group>"; };
+		F00000000000000000000028 /* ReminderPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPolicyTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000029 /* DuplicateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetectorTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000002A /* ScreenshotVaultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotVaultTests.swift; sourceTree = "<group>"; };
+		F0000000000000000000002B /* SnapCalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalUITests.swift; sourceTree = "<group>"; };
+		F0000000000000000000002C /* SnapCalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SnapCalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,6 +128,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		W00000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -100,6 +143,7 @@
 			children = (
 				G00000000000000000000001 /* SnapCal */,
 				G00000000000000000000008 /* apps/macos/SnapCalTests */,
+				G00000000000000000000010 /* apps/macos/SnapCalUITests */,
 				G00000000000000000000009 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -141,6 +185,7 @@
 				F00000000000000000000004 /* EventDraft.swift */,
 				F00000000000000000000010 /* CalendarEvent.swift */,
 				F00000000000000000000019 /* ExtractionMode.swift */,
+				F00000000000000000000024 /* TrustPolicies.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -157,6 +202,10 @@
 				F00000000000000000000014 /* GoogleOAuthService.swift */,
 				F00000000000000000000015 /* GoogleCalendarService.swift */,
 				F0000000000000000000001A /* GeminiExtractionClient.swift */,
+				F0000000000000000000001E /* ClipboardImageReader.swift */,
+				F00000000000000000000021 /* SQLiteDraftStore.swift */,
+				F00000000000000000000025 /* LocationResolver.swift */,
+				F00000000000000000000026 /* ScreenshotVault.swift */,
 			);
 			path = Infrastructure;
 			sourceTree = "<group>";
@@ -166,6 +215,9 @@
 			children = (
 				G0000000000000000000000A /* Import */,
 				G0000000000000000000000C /* Notch */,
+				G0000000000000000000000D /* MenuBar */,
+				G0000000000000000000000E /* History */,
+				G0000000000000000000000F /* Settings */,
 				G0000000000000000000000B /* Review */,
 			);
 			path = Features;
@@ -182,6 +234,11 @@
 				F00000000000000000000018 /* GoogleCalendarClientTests.swift */,
 				F0000000000000000000001B /* GeminiExtractionClientTests.swift */,
 				F0000000000000000000001D /* NotchDropZoneTests.swift */,
+				F00000000000000000000020 /* ClipboardImageReaderTests.swift */,
+				F00000000000000000000023 /* SQLiteDraftStoreTests.swift */,
+				F00000000000000000000028 /* ReminderPolicyTests.swift */,
+				F00000000000000000000029 /* DuplicateDetectorTests.swift */,
+				F0000000000000000000002A /* ScreenshotVaultTests.swift */,
 			);
 			path = apps/macos/SnapCalTests;
 			sourceTree = "<group>";
@@ -191,8 +248,17 @@
 			children = (
 				F0000000000000000000000E /* SnapCal.app */,
 				F0000000000000000000000F /* SnapCalTests.xctest */,
+				F0000000000000000000002C /* SnapCalUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		G00000000000000000000010 /* apps/macos/SnapCalUITests */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000002B /* SnapCalUITests.swift */,
+			);
+			path = apps/macos/SnapCalUITests;
 			sourceTree = "<group>";
 		};
 		G0000000000000000000000A /* Import */ = {
@@ -217,6 +283,30 @@
 				F0000000000000000000001C /* NotchDropZone.swift */,
 			);
 			path = Notch;
+			sourceTree = "<group>";
+		};
+		G0000000000000000000000D /* MenuBar */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000001F /* SnapCalMenuBarView.swift */,
+			);
+			path = MenuBar;
+			sourceTree = "<group>";
+		};
+		G0000000000000000000000E /* History */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000022 /* RecentDraftsView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		G0000000000000000000000F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000027 /* PrivacySettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -257,6 +347,24 @@
 			productReference = F0000000000000000000000F /* SnapCalTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		T00000000000000000000003 /* SnapCalUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = L00000000000000000000004 /* Build configuration list for PBXNativeTarget "SnapCalUITests" */;
+			buildPhases = (
+				S00000000000000000000003 /* Sources */,
+				W00000000000000000000003 /* Frameworks */,
+				R00000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D00000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = SnapCalUITests;
+			productName = SnapCalUITests;
+			productReference = F0000000000000000000002C /* SnapCalUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -271,6 +379,10 @@
 						CreatedOnToolsVersion = 16.4;
 					};
 					T00000000000000000000002 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = T00000000000000000000001;
+					};
+					T00000000000000000000003 = {
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = T00000000000000000000001;
 					};
@@ -291,6 +403,7 @@
 			targets = (
 				T00000000000000000000001 /* SnapCal */,
 				T00000000000000000000002 /* SnapCalTests */,
+				T00000000000000000000003 /* SnapCalUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -304,6 +417,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		R00000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		R00000000000000000000003 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -333,8 +453,16 @@
 				B00000000000000000000014 /* GoogleOAuthService.swift in Sources */,
 				B00000000000000000000015 /* GoogleCalendarService.swift in Sources */,
 				B00000000000000000000019 /* ExtractionMode.swift in Sources */,
+				B00000000000000000000024 /* TrustPolicies.swift in Sources */,
 				B0000000000000000000001A /* GeminiExtractionClient.swift in Sources */,
 				B0000000000000000000001C /* NotchDropZone.swift in Sources */,
+				B0000000000000000000001E /* ClipboardImageReader.swift in Sources */,
+				B0000000000000000000001F /* SnapCalMenuBarView.swift in Sources */,
+				B00000000000000000000021 /* SQLiteDraftStore.swift in Sources */,
+				B00000000000000000000022 /* RecentDraftsView.swift in Sources */,
+				B00000000000000000000025 /* LocationResolver.swift in Sources */,
+				B00000000000000000000026 /* ScreenshotVault.swift in Sources */,
+				B00000000000000000000027 /* PrivacySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +478,19 @@
 				B00000000000000000000018 /* GoogleCalendarClientTests.swift in Sources */,
 				B0000000000000000000001B /* GeminiExtractionClientTests.swift in Sources */,
 				B0000000000000000000001D /* NotchDropZoneTests.swift in Sources */,
+				B00000000000000000000020 /* ClipboardImageReaderTests.swift in Sources */,
+				B00000000000000000000023 /* SQLiteDraftStoreTests.swift in Sources */,
+				B00000000000000000000028 /* ReminderPolicyTests.swift in Sources */,
+				B00000000000000000000029 /* DuplicateDetectorTests.swift in Sources */,
+				B0000000000000000000002A /* ScreenshotVaultTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		S00000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0000000000000000000002B /* SnapCalUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,6 +501,11 @@
 			isa = PBXTargetDependency;
 			target = T00000000000000000000001 /* SnapCal */;
 			targetProxy = C00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		D00000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = T00000000000000000000001 /* SnapCal */;
+			targetProxy = C00000000000000000000002 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -378,6 +524,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				SNAPCAL_APP_BUNDLE_IDENTIFIER = com.snapcal.app;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -395,6 +542,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				SDKROOT = macosx;
+				SNAPCAL_APP_BUNDLE_IDENTIFIER = com.snapcal.app;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALIDATE_PRODUCT = YES;
@@ -416,7 +564,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SNAPCAL_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -438,7 +586,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SNAPCAL_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -473,6 +621,32 @@
 			};
 			name = Release;
 		};
+		C00000000000000000000400 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SnapCal;
+			};
+			name = Debug;
+		};
+		C00000000000000000000401 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.snapcal.app.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SnapCal;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -499,6 +673,15 @@
 			buildConfigurations = (
 				C00000000000000000000300 /* Debug */,
 				C00000000000000000000301 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		L00000000000000000000004 /* Build configuration list for PBXNativeTarget "SnapCalUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000400 /* Debug */,
+				C00000000000000000000401 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

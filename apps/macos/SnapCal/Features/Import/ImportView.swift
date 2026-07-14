@@ -3,6 +3,7 @@ import SwiftUI
 struct ImportView: View {
     @Binding var extractionMode: ExtractionMode
     let onChooseScreenshot: () -> Void
+    let onPasteScreenshot: () -> Void
 
     var body: some View {
         VStack(spacing: 28) {
@@ -21,7 +22,7 @@ struct ImportView: View {
                 Text("Turn a screenshot into an event draft")
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("SnapCal reads Vietnamese and English locally with Apple Vision, then lets you review every field.")
+                Text("SnapCal extracts Vietnamese and English event details, then lets you review every field before anything reaches your calendar.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -46,15 +47,26 @@ struct ImportView: View {
                     .accessibilityIdentifier("extractionModeDisclosure")
             }
 
-            Button(action: onChooseScreenshot) {
-                Label("Choose Screenshot", systemImage: "photo.on.rectangle")
-                    .font(.headline)
-                    .padding(.horizontal, 10)
+            HStack(spacing: 12) {
+                Button(action: onChooseScreenshot) {
+                    Label("Choose Screenshot", systemImage: "photo.on.rectangle")
+                        .font(.headline)
+                        .padding(.horizontal, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("chooseScreenshotButton")
+
+                Button(action: onPasteScreenshot) {
+                    Label("Paste Screenshot", systemImage: "doc.on.clipboard")
+                        .font(.headline)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .keyboardShortcut("v")
+                .accessibilityIdentifier("pasteScreenshotButton")
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut(.defaultAction)
-            .accessibilityIdentifier("chooseScreenshotButton")
 
             Label("PNG, JPG, JPEG, or HEIC • up to 20 MB", systemImage: "lock.shield")
                 .font(.callout)
@@ -73,7 +85,7 @@ struct ImportView: View {
     private var modeDisclosure: String {
         switch extractionMode {
         case .localOnly:
-            return "Uses Apple Vision on this Mac. Your image does not leave the device."
+            return "Uses Apple Vision OCR plus deterministic rules on this Mac. It is not a language model and may miss context; your image never leaves the device."
         case .accuracy:
             return "Sends the image and recognized text to your SnapCal service and OpenRouter for a more accurate draft."
         }
@@ -86,7 +98,7 @@ struct ImportView: View {
     private var privacySummary: String {
         switch extractionMode {
         case .localOnly:
-            return "Local Only — no image is uploaded, saved, or added to a calendar."
+            return "Local Only favors privacy over semantic accuracy. Use Accuracy Mode when wording or poster context is complex."
         case .accuracy:
             return "Accuracy Mode is opt-in. SnapCal's local service does not persist the image; nothing is added to a calendar until you confirm."
         }

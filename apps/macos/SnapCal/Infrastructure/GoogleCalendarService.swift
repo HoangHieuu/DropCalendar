@@ -13,11 +13,22 @@ struct GoogleCalendarEventPayload: Encodable, Equatable {
         }
     }
 
+    struct Reminders: Encodable, Equatable {
+        struct Override: Encodable, Equatable {
+            let method: String
+            let minutes: Int
+        }
+
+        let useDefault: Bool
+        let overrides: [Override]
+    }
+
     let summary: String
     let location: String?
     let description: String?
     let start: Boundary
     let end: Boundary
+    let reminders: Reminders
 
     static func make(from request: CalendarEventRequest) -> GoogleCalendarEventPayload {
         let start: Boundary
@@ -43,7 +54,16 @@ struct GoogleCalendarEventPayload: Encodable, Equatable {
             location: request.location,
             description: request.description,
             start: start,
-            end: end
+            end: end,
+            reminders: Reminders(
+                useDefault: false,
+                overrides: request.reminders.map {
+                    Reminders.Override(
+                        method: $0.method.rawValue,
+                        minutes: $0.minutesBefore
+                    )
+                }
+            )
         )
     }
 }

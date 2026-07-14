@@ -11,7 +11,17 @@ struct SnapCalApp: App {
         }
         .defaultSize(width: 920, height: 680)
         .windowResizability(.contentMinSize)
+
+        MenuBarExtra("SnapCal", systemImage: "calendar.badge.plus") {
+            SnapCalMenuBarView(model: model)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            PrivacySettingsView(model: model)
+        }
     }
+
 }
 
 private struct SnapCalRootView: View {

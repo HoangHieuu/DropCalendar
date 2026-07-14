@@ -9,13 +9,28 @@ struct ContentView: View {
         Group {
             switch model.phase {
             case .ready:
-                ImportView(
-                    extractionMode: Binding(
-                        get: { model.extractionMode },
-                        set: { model.extractionMode = $0 }
+                HStack(spacing: 0) {
+                    ImportView(
+                        extractionMode: Binding(
+                            get: { model.extractionMode },
+                            set: { model.extractionMode = $0 }
+                        ),
+                        onChooseScreenshot: { isImporterPresented = true },
+                        onPasteScreenshot: {
+                            Task { await model.importClipboardImage() }
+                        }
                     )
-                ) {
-                    isImporterPresented = true
+                    Divider()
+                    RecentDraftsView(
+                        drafts: model.recentDrafts,
+                        issue: model.draftHistoryIssue,
+                        onOpen: { id in
+                            Task { await model.openRecentDraft(id: id) }
+                        },
+                        onDelete: { id in
+                            Task { await model.deleteRecentDraft(id: id) }
+                        }
+                    )
                 }
             case .processing(let fileName):
                 ProcessingView(fileName: fileName, mode: model.extractionMode)
@@ -32,6 +47,7 @@ struct ContentView: View {
         .frame(minWidth: 760, minHeight: 560)
         .task {
             await model.loadCalendarConnectionStatus()
+            await model.loadRecentDrafts()
         }
         .fileImporter(
             isPresented: $isImporterPresented,
