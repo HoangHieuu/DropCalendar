@@ -73,6 +73,44 @@ final class GoogleOAuthTests: XCTestCase {
         }
     }
 
+    func testTeamSignedDataProtectionKeychainRoundTripUsesIsolatedItemAndCleansUp() async throws {
+        guard let teamIdentifier = KeychainStoragePolicy.currentTeamIdentifier() else {
+            throw XCTSkip("Data Protection Keychain proof requires a team-signed test host.")
+        }
+        XCTAssertEqual(
+            KeychainStoragePolicy.preferredBackend(teamIdentifier: teamIdentifier),
+            .dataProtection
+        )
+
+        let service = "com.snapcal.tests.oauth.dataprotection.\(UUID().uuidString)"
+        let account = "isolated-platform-fixture"
+        let client = SecurityKeychainItemClient()
+        let fixture = Data("not-a-real-provider-token".utf8)
+
+        _ = client.delete(service: service, account: account, backend: .dataProtection)
+        let writeStatus = client.write(
+            fixture,
+            service: service,
+            account: account,
+            backend: .dataProtection
+        )
+        XCTAssertEqual(writeStatus, errSecSuccess, "Data Protection write OSStatus: \(writeStatus)")
+        guard writeStatus == errSecSuccess else { return }
+
+        XCTAssertEqual(
+            client.read(service: service, account: account, backend: .dataProtection),
+            .value(fixture)
+        )
+        XCTAssertEqual(
+            client.delete(service: service, account: account, backend: .dataProtection),
+            errSecSuccess
+        )
+        XCTAssertEqual(
+            client.read(service: service, account: account, backend: .dataProtection),
+            .notFound
+        )
+    }
+
     func testPKCEChallengeMatchesRFC7636Vector() {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
         XCTAssertEqual(

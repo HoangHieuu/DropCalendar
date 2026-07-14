@@ -68,6 +68,33 @@ final class SnapCalUITests: XCTestCase {
         )
     }
 
+    func testNotchHoverExpandsAndKeepsAStableFrame() {
+        launch(reset: true)
+
+        let notch = app.descendants(matching: .any)["notchDropZone"]
+        XCTAssertTrue(
+            notch.waitForExistence(timeout: 10),
+            "The persistent notch drop zone should be exposed to macOS accessibility."
+        )
+        let collapsedFrame = notch.frame
+
+        notch.hover()
+        let expanded = NSPredicate { _, _ in
+            notch.frame.height > collapsedFrame.height + 40
+        }
+        expectation(for: expanded, evaluatedWith: nil)
+        waitForExpectations(timeout: 3)
+
+        let settledFrame = notch.frame
+        for _ in 0..<5 {
+            Thread.sleep(forTimeInterval: 0.12)
+            XCTAssertEqual(notch.frame.minX, settledFrame.minX, accuracy: 1)
+            XCTAssertEqual(notch.frame.minY, settledFrame.minY, accuracy: 1)
+            XCTAssertEqual(notch.frame.width, settledFrame.width, accuracy: 1)
+            XCTAssertEqual(notch.frame.height, settledFrame.height, accuracy: 1)
+        }
+    }
+
     private func launch(reset: Bool) {
         app.launchEnvironment["SNAPCAL_UI_TEST_RUN_ID"] = runID
         app.launchEnvironment["SNAPCAL_UI_TEST_RESET"] = reset ? "1" : "0"

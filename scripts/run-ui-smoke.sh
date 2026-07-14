@@ -13,6 +13,6 @@ exec xcodebuild test \
   -scheme SnapCalUISmoke \
   -destination 'platform=macOS' \
   -derivedDataPath "${DERIVED_DATA_PATH}" \
-  SNAPCAL_APP_BUNDLE_IDENTIFIER=com.snapcal.app.uitesthost \
+  SNAPCAL_APP_BUNDLE_IDENTIFIER=com.hkud5at6v6.snapcal.uitesthost \
   -only-testing:SnapCalUITests \
   "$@"

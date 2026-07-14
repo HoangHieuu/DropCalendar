@@ -27,6 +27,35 @@ final class NotchDropZoneTests: XCTestCase {
         XCTAssertEqual(frame.maxY, 1_080)
     }
 
+    func testExpandedPanelContainsTheEntireCollapsedHoverRegion() {
+        let screenFrame = CGRect(x: 100, y: 50, width: 1_440, height: 900)
+        let collapsedFrame = NotchPanelLayout.frame(
+            in: screenFrame,
+            topInset: 38,
+            isExpanded: false
+        )
+        let expandedFrame = NotchPanelLayout.frame(
+            in: screenFrame,
+            topInset: 38,
+            isExpanded: true
+        )
+
+        XCTAssertTrue(expandedFrame.contains(collapsedFrame))
+    }
+
+    func testHoverExitPolicyRetainsPointerAcrossSmallTrackingAreaJitter() {
+        let panelFrame = CGRect(x: 100, y: 700, width: 372, height: 148)
+
+        XCTAssertTrue(NotchHoverExitPolicy.containsPointer(
+            CGPoint(x: panelFrame.minX - 5, y: panelFrame.midY),
+            in: panelFrame
+        ))
+        XCTAssertFalse(NotchHoverExitPolicy.containsPointer(
+            CGPoint(x: panelFrame.minX - 7, y: panelFrame.midY),
+            in: panelFrame
+        ))
+    }
+
     func testDropSelectionUsesFirstSupportedImageAndReportsIgnoredItems() throws {
         let selection = try NotchDropSelection.select(from: [
             URL(fileURLWithPath: "/tmp/readme.txt"),
