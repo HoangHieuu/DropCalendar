@@ -4,7 +4,8 @@
 
 MVP image formats are PNG, JPG/JPEG, and HEIC.
 
-- macOS: manual file import first; later drag/drop, clipboard, and menu bar.
+- macOS: manual file import plus a top-center notch-style file drop zone;
+  clipboard and menu-bar intake remain later slices.
 - iOS: Share Extension and in-app image picker.
 - Android: `ACTION_SEND` share target and in-app image picker.
 

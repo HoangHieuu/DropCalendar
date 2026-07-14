@@ -6,10 +6,15 @@ The repository contains a macOS 14 SwiftUI app, XCTest target, and a loopback
 FastAPI extraction service. Local Only keeps extraction on-device. Opt-in
 Accuracy Mode sends a bounded JPEG plus layout-aware Apple Vision OCR to the
 local service, which owns the OpenRouter credential and validates strict
-structured output from `google/gemini-3.1-flash-lite`. Drafts remain in memory. Google desktop OAuth with
-PKCE stores its refresh token in Keychain and Calendar REST creation remains
-behind explicit confirmation. There is no production deployment, database, or
-benchmark corpus.
+structured output from `google/gemini-3.1-flash-lite`. Drafts remain in memory.
+Google desktop OAuth with PKCE uses the same loopback service for secret-bearing
+token exchange, stores its refresh token in Keychain when the build has a usable
+signed identity, and keeps Calendar REST creation behind explicit confirmation.
+There is no production deployment, database, or benchmark corpus.
+
+The macOS surface owns one shared `SnapCalModel`. A non-activating AppKit
+`NSPanel` hosts the SwiftUI notch drop target and forwards selected file URLs
+into that model; it does not own extraction or Calendar state.
 
 ## First Vertical Slice
 
@@ -24,6 +29,7 @@ SwiftUI manual image import and review
   -> in-memory editable review
   -> explicit confirmation state machine
   -> Google desktop OAuth (system browser + loopback callback + PKCE)
+  -> loopback FastAPI token broker -> Google OAuth token endpoint
   -> Google Calendar REST events.insert
 ```
 
@@ -38,15 +44,17 @@ reviewed EventDraft
   -> pure validation/mapping
   -> awaitingConfirmation (zero provider calls)
   -> explicit user confirmation
-  -> authorize or refresh
+  -> authorize or refresh through bounded loopback token broker
   -> POST primary calendar event
   -> success receipt or recoverable failure with draft preserved
 ```
 
 The app embeds only the public desktop OAuth client ID. It never reads or
-bundles the downloaded credential JSON or client secret. The system browser
-handles Google sign-in; a short-lived `127.0.0.1` listener receives the callback.
-The requested scope is limited to creating events in calendars the user owns.
+bundles the downloaded credential JSON or client secret. The local FastAPI
+service reads that JSON from an explicit ignored path and adds the secret only
+when forwarding a token request to Google. The system browser handles Google
+sign-in; a short-lived `127.0.0.1` listener receives the callback. The requested
+scope is limited to creating events in calendars the user owns.
 
 ## Product Boundaries
 
@@ -133,7 +141,10 @@ Parse and validate all unknown data at entry:
 ## Persistence And Secrets
 
 - SQLite stores local draft metadata first.
-- Keychain stores OAuth credentials on Apple platforms.
+- Keychain stores OAuth credentials on Apple platforms. An unsigned local build
+  may use the current access token even when refresh-token persistence is
+  unavailable; it must request consent again after that in-memory token expires
+  or the app restarts.
 - PostgreSQL is deferred until a server-owned metadata need is proven.
 - Object storage is prohibited by default and requires opt-in screenshot
   history plus a retention/deletion design.

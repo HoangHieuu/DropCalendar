@@ -58,7 +58,12 @@ validation, visible fallback, and executable proof that Local Only makes zero
 cloud calls and the client contains no provider credential. US-004 replaces the
 direct provider adapter with OpenRouter, uses strict JSON Schema output, keeps
 Bearer authorization server-side, redacts upstream failures, and defaults to
-`google/gemini-3.1-flash-lite`. The macOS target builds and all 30 XCTest cases
-pass; the FastAPI suite adds 11 passing contract tests. Live OpenRouter output, browser
+`google/gemini-3.1-flash-lite`. US-005 adds deterministic top-center panel
+geometry, first-supported-image selection, unsupported-drop refusal, and a
+shared-model integration path that still lands in review. The macOS target
+builds and all 37 XCTest cases
+pass; the FastAPI suite has 16 passing contract tests, including the local
+Google OAuth token-broker boundary. Live OpenRouter output, browser
 consent, Keychain, and one confirmed Calendar event remain user-driven proofs;
-deletion and the benchmark gates remain unimplemented.
+live notch hover/drop, deletion, and the benchmark gates remain user-driven or
+unimplemented proofs.

@@ -30,6 +30,15 @@ OAuth begins only as part of user-confirmed creation. Cancellation or provider
 failure preserves the draft and does not report success. Successful creation
 stores the returned provider event identity and calendar link when available.
 
+The native app owns PKCE, state validation, the system-browser callback, access
+tokens, refresh tokens, and the confirmed Calendar write. Its bounded token
+exchange request goes to the loopback SnapCal service, which reads the installed
+OAuth credential JSON from an explicit ignored environment path and adds the
+client secret only to Google's token endpoint request. No credential JSON or
+client secret is copied into source or the app bundle. Broker configuration,
+client mismatch, and provider rejection are separate redacted recoverable
+errors.
+
 ## Reminder Rules
 
 - Generic: 1 day and 1 hour before.

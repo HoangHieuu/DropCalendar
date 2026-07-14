@@ -4,9 +4,11 @@
 
 ### macOS
 
-The first production target is a SwiftUI menu-bar utility. Phase 1 starts with
-manual import; Phase 3 adds `MenuBarExtra`, clipboard intake, recent drafts, and
-an AppKit-backed floating top-center drop zone that expands during drag.
+The first production target is a SwiftUI menu-bar utility. Manual import is
+implemented. US-005 adds the first AppKit-backed floating top-center drop zone:
+it stays compact across spaces, expands on hover or drag, and forwards the first
+supported image into the existing review flow. `MenuBarExtra`, clipboard intake,
+and recent drafts remain later Phase 3 slices.
 
 ### iOS
 

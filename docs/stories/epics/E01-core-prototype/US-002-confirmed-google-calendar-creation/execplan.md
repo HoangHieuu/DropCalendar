@@ -45,6 +45,8 @@ Hard gates:
 5. Add deterministic tests and build/launch proof.
 6. Perform live OAuth/calendar proof only through explicit user interaction.
 7. Update product truth, decision, story proof, and Harness trace.
+8. Route token exchange through the secret-owning loopback service after live
+   proof shows the installed credential rejects secretless exchange.
 
 ## Stop Conditions
 

@@ -2,9 +2,12 @@
 
 ## Current Behavior
 
-SnapCal produces an editable in-memory event draft. The Create Event control is
-disabled and the app has no authentication, Keychain, network, or calendar
-provider implementation.
+SnapCal produces an editable in-memory event draft and has guarded OAuth,
+Keychain, Calendar REST, and confirmation-state implementations. The first live
+run completed consent and callback but exposed a provider mismatch: the
+installed OAuth credential rejected the app's secretless token exchange. Token
+exchange now uses the configured loopback SnapCal service, while the app keeps
+PKCE/state validation, tokens, and Calendar insertion.
 
 ## Target Behavior
 

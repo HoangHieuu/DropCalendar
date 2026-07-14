@@ -26,7 +26,13 @@ layout-aware OCR to a loopback FastAPI proxy, which keeps the OpenRouter
 credential out of the app and validates strict structured output from
 `google/gemini-3.1-flash-lite`. Images and
 drafts remain in memory. The Google refresh token is the only persisted value
-and is stored in macOS Keychain.
+and is stored in macOS Keychain when the local build has a usable signed
+Keychain identity. The same loopback service brokers Google OAuth token
+exchange because the installed OAuth credential requires its client secret;
+the secret and downloaded credential JSON never enter the app bundle or source.
+The macOS app also presents a compact top-center notch-style panel that expands
+on hover or drag targeting. Dropping an image there brings the main window
+forward and enters the same extraction and mandatory-review flow.
 
 The root `SPEC.md` is the supplied source snapshot. The smaller files under
 `docs/product/`, the active story packets, executable proof, and accepted
@@ -36,10 +42,15 @@ decisions are the living contract for ongoing work.
 
 Open `SnapCal.xcodeproj` in Xcode, select the `SnapCal` scheme and **My Mac**, then
 press **Run** (`Command-R`). The deployment target is macOS 14.0. Local Only
-requires no package installation or API key. A Google account listed as an
-OAuth test user is required for the live Calendar flow. The downloaded desktop
+extraction requires no package installation or API key. A Google account listed
+as an OAuth test user is required for the live Calendar flow. Calendar creation
+also requires the local service described below. The downloaded desktop
 credential JSON stays outside this repository; the app embeds only its public
 OAuth client ID and never embeds or reads the client secret.
+
+After launch, move the pointer to the compact `SnapCal` pill at the top-center
+of the display or drag a PNG, JPEG, or HEIC screenshot onto it. The panel
+expands, accepts the first supported image, and opens the review flow.
 
 Accuracy Mode requires an OpenRouter API key. Do not use the Google Calendar
 OAuth JSON for this. Create the local service and private environment file once:
@@ -47,11 +58,14 @@ OAuth JSON for this. Create the local service and private environment file once:
 ```bash
 cp .env.example .env
 # Edit .env and replace the OPENROUTER_API_KEY placeholder with your key.
+# Set GOOGLE_OAUTH_CREDENTIALS_FILE to the absolute path of the downloaded
+# Desktop OAuth JSON kept outside this repository.
 python3 -m venv .venv
 .venv/bin/python -m pip install -r services/extraction-api/requirements.txt
 ```
 
-Then start it in a separate Terminal window before selecting Accuracy Mode:
+Then start it in a separate Terminal window before selecting Accuracy Mode or
+confirming Google Calendar creation:
 
 ```bash
 scripts/run-extraction-api.sh

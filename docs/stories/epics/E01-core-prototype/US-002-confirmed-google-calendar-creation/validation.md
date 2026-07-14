@@ -12,10 +12,10 @@ OAuth/create remains a user-confirmed platform check.
 
 | Layer | Cases |
 | --- | --- |
-| Unit | PKCE shape; callback state/cancel/error; title/start/end validation; timed and all-day payloads; provider response parsing |
+| Unit | PKCE shape; callback state/cancel/error; title/start/end validation; timed and all-day payloads; token-broker grant validation; provider response parsing |
 | Integration | request does not call scheduler; cancel does not call; confirm calls once; failure preserves draft; retry requires confirmation; disconnect clears state |
 | E2E | User-driven browser consent and one confirmed primary-calendar event |
-| Platform | Xcode build/test; app launch; browser open; loopback callback; Keychain entitlement behavior |
+| Platform | Xcode build/test; app launch; browser open; loopback callback; local token-broker smoke; Keychain entitlement behavior |
 | Performance | No benchmark; provider call remains outside render paths |
 | Logs/Audit | Static scan and tests confirm tokens, codes, secret, and event payloads are not logged |
 
@@ -48,5 +48,13 @@ xcodebuild -project SnapCal.xcodeproj -scheme SnapCal \
 - Static scan found the public OAuth client ID only; no downloaded JSON, client
   secret, refresh token, access token, authorization code, or private event
   payload is bundled or logged.
+- 2026-07-14: macOS unified logs proved browser callback success followed by
+  HTTP 400 from `oauth2.googleapis.com/token`; no Calendar endpoint was called.
+- 2026-07-14: the configured loopback broker loaded the external installed-app
+  credential, reached Google's token endpoint with an intentionally invalid
+  code, and returned only redacted `oauth_exchange_rejected` with HTTP 400.
+- 2026-07-14: all 32 Xcode tests and all 16 FastAPI contract tests passed,
+  including broker validation, client mismatch, response redaction, secret
+  confinement, and non-fatal refresh-token persistence failure.
 - Pending user-driven proof: Google consent, loopback callback, Keychain reuse,
   one explicitly confirmed event, provider link, and disconnect/reconnect.

@@ -61,6 +61,9 @@ Tradeoffs:
 
 ## Follow-Up
 
+- Decision 0013 refines token-exchange ownership after live proof showed that
+  the installed Google OAuth credential rejects secretless exchange. The app
+  remains secret-free; the local service owns the secret-bearing provider call.
 - Add account identity and calendar selection only when a separate story needs
   the additional scopes.
 - Revisit a vetted SDK if provider requirements outgrow the bounded adapter.
