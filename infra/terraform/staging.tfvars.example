@@ -1,0 +1,14 @@
+project_id          = "snapcal-staging"
+environment         = "staging"
+backend_image       = "asia-southeast1-docker.pkg.dev/snapcal-staging/snapcal-backend/api@sha256:REPLACE_WITH_64_HEX"
+api_base_url        = "https://staging-api.snapcal.example"
+web_base_url        = "https://www.snapcal.example"
+api_domains         = ["staging-api.snapcal.example"]
+github_repository   = "OWNER/REPOSITORY"
+paddle_environment  = "sandbox"
+notification_channels = []
+# After production Terraform creates its deploy service account, grant it
+# read-only access here so production can copy the exact tested digest.
+artifact_registry_readers = [
+  "serviceAccount:snapcal-deploy-production@snapcal-production.iam.gserviceaccount.com",
+]

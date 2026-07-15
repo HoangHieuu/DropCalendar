@@ -1,0 +1,84 @@
+name: macOS signed release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment: production-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            services/extraction-api/requirements.txt
+            services/extraction-api/requirements-dev.txt
+      - name: Run locked Python release checks
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/benchmark
+        run: |
+          python -m pip install -r services/extraction-api/requirements-dev.txt pip-audit
+          python -m pytest services/extraction-api/tests packages/benchmark/tests -q
+          pip-audit -r services/extraction-api/requirements.txt
+      - name: Run locked macOS release checks
+        run: >-
+          xcodebuild -project SnapCal.xcodeproj -scheme SnapCal
+          -destination 'platform=macOS'
+          -packageAuthorizationProvider netrc
+          -disableAutomaticPackageResolution
+          -onlyUsePackageVersionsFromResolvedFile
+          -derivedDataPath .build/ReleaseTestDerivedData
+          -parallel-testing-enabled NO
+          CODE_SIGNING_ALLOWED=NO test
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.RELEASE_KEYCHAIN_PASSWORD }}
+        run: |
+          certificate="${RUNNER_TEMP}/developer-id.p12"
+          keychain="${RUNNER_TEMP}/snapcal-release.keychain-db"
+          printf '%s' "${CERTIFICATE_P12_BASE64}" | base64 --decode >"${certificate}"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain}"
+          security set-keychain-settings -lut 21600 "${keychain}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain}"
+          security import "${certificate}" -k "${keychain}" -P "${CERTIFICATE_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${keychain}"
+          security list-keychains -d user -s "${keychain}"
+      - name: Prepare notary API key
+        env:
+          NOTARY_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+        run: |
+          key_path="${RUNNER_TEMP}/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8"
+          printf '%s' "${NOTARY_KEY}" >"${key_path}"
+          chmod 600 "${key_path}"
+          echo "SNAPCAL_NOTARY_KEY_PATH=${key_path}" >>"${GITHUB_ENV}"
+      - name: Archive, notarize, staple, and sign appcast
+        env:
+          SNAPCAL_API_BASE_URL: ${{ vars.SNAPCAL_API_BASE_URL }}
+          SNAPCAL_UPDATE_FEED_URL: ${{ vars.SNAPCAL_UPDATE_FEED_URL }}
+          SNAPCAL_SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          SNAPCAL_SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SNAPCAL_NOTARY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          SNAPCAL_NOTARY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          SNAPCAL_DOWNLOAD_URL_PREFIX: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        run: scripts/release-macos.sh
+      - name: Publish immutable artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          release-output/SnapCal-*.dmg
+          release-output/appcast.xml
+          release-output/SHA256SUMS
+          --verify-tag
+          --generate-notes

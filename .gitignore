@@ -3,28 +3,123 @@ harness.db
 harness.db-wal
 harness.db-shm
 
-# macOS Finder metadata.
-.DS_Store
+# Secrets and machine-specific configuration.
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+.envrc
+.direnv/
+.secrets/
+secrets/
+credentials/
+client_secret*.json
+google-oauth-credentials*.json
+oauth-credentials*.json
+service-account*.json
+application_default_credentials.json
+gha-creds-*.json
 
-# Rust build output for harness tooling.
+# Signing, notarization, provisioning, and private update keys.
+*.p8
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+sparkle-private-key*
+sparkle_private_key*
+
+# Private and generated benchmark/acquisition data. Synthetic fixtures under
+# packages/benchmark/corpus remain tracked.
+private-data/
+data/private/
+packages/benchmark/private/
+packages/benchmark/quarantine/
+packages/benchmark/downloads/
+packages/benchmark/runs/
+dataset_image-downloader_*.json
+apify-output*.json
+apify-dataset*.json
+apify_storage/
+
+# Local databases and runtime state.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.pid
+*.log
+
+# Terraform local state and environment-specific values. Commit source,
+# examples, and .terraform.lock.hcl for reproducible deployments.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!**/*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# Xcode, SwiftPM, signing output, and local release products.
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcresult
+*.xcarchive
+*.dSYM
+*.dSYM.zip
+*.ipa
+*.dmg
+*.pkg
+SourcePackages/
+.swiftpm/
+release-output/
+
+# Python virtual environments, caches, coverage, and test output.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Rust and general generated build output for Harness tooling.
 target/
 dist/
 
-# Local Xcode build products and derived data.
-.build/
-xcuserdata/
-*.xcuserstate
-.venv/
-.env
-services/extraction-api/.env
-
-# Python caches and test output.
-__pycache__/
-.pytest_cache/
-*.pyc
-
-# Generated extraction benchmark predictions.
-packages/benchmark/runs/*.jsonl
+# Local editor and operating-system metadata.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.fleet/
+*.swp
+*.swo
+*~
 
 # Downloaded Harness CLI binary for installed project instances.
 scripts/bin/harness-cli

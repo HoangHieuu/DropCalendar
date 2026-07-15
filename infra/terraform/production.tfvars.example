@@ -1,0 +1,10 @@
+project_id          = "snapcal-production"
+environment         = "production"
+backend_image       = "asia-southeast1-docker.pkg.dev/snapcal-production/snapcal-backend/api@sha256:REPLACE_WITH_64_HEX"
+api_base_url        = "https://api.snapcal.example"
+web_base_url        = "https://www.snapcal.example"
+api_domains         = ["api.snapcal.example"]
+github_repository   = "OWNER/REPOSITORY"
+paddle_environment  = "production"
+notification_channels = []
+artifact_registry_readers = []
