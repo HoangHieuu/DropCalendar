@@ -19,6 +19,7 @@ private enum AccuracyRunnerError: LocalizedError {
     case invalidCaptureTime(String)
     case invalidTimeZone(String)
     case invalidEndpoint
+    case benchmarkAborted(String, String)
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +33,8 @@ private enum AccuracyRunnerError: LocalizedError {
             return "Fixture \(itemID) has an invalid timezone."
         case .invalidEndpoint:
             return "The Accuracy Mode benchmark endpoint is invalid."
+        case let .benchmarkAborted(itemID, reason):
+            return "Accuracy benchmark aborted before fixture \(itemID): \(reason)"
         }
     }
 }
@@ -80,6 +83,21 @@ private enum AccuracyBenchmarkRunner {
                     draft: result.draft,
                     timeZone: timeZone,
                     latencyMilliseconds: elapsedMilliseconds(since: started)
+                )
+            } catch CloudExtractionError.benchmarkBudgetExhausted {
+                throw AccuracyRunnerError.benchmarkAborted(
+                    row.id,
+                    "authorized budget exhausted"
+                )
+            } catch CloudExtractionError.benchmarkUsageUnavailable {
+                throw AccuracyRunnerError.benchmarkAborted(
+                    row.id,
+                    "request cost unavailable"
+                )
+            } catch CloudExtractionError.benchmarkPreflightFailed {
+                throw AccuracyRunnerError.benchmarkAborted(
+                    row.id,
+                    "provider limit preflight failed"
                 )
             } catch {
                 prediction = failurePrediction(
@@ -172,6 +190,10 @@ private enum AccuracyBenchmarkRunner {
         case CloudExtractionError.invalidResponse:
             reason = "invalid_provider_output"
         case CloudExtractionError.unavailable, CloudExtractionError.notConfigured:
+            reason = "provider_unavailable"
+        case CloudExtractionError.benchmarkBudgetExhausted,
+             CloudExtractionError.benchmarkUsageUnavailable,
+             CloudExtractionError.benchmarkPreflightFailed:
             reason = "provider_unavailable"
         case ImageValidationError.unsupportedFormat:
             reason = "unsupported_image"

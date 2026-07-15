@@ -7,10 +7,23 @@ manifest="${SNAPCAL_BENCHMARK_MANIFEST:-${repo_root}/packages/benchmark/corpus/m
 runs_dir="${SNAPCAL_BENCHMARK_RUNS_DIR:-${repo_root}/packages/benchmark/runs}"
 predictions="${runs_dir}/local_only.jsonl"
 runner="${build_root}/SnapCalLocalBenchmarkRunner"
-validation_args=(--require-complete)
+profile="${SNAPCAL_BENCHMARK_PROFILE:-acceptance}"
+
+case "${profile}" in
+  calibration)
+    validation_args=(--require-calibration)
+    ;;
+  acceptance|regression)
+    validation_args=(--require-complete)
+    ;;
+  *)
+    echo "SNAPCAL_BENCHMARK_PROFILE must be calibration, acceptance, or regression." >&2
+    exit 64
+    ;;
+esac
 
 if [[ "${SNAPCAL_BENCHMARK_REQUIRE_REAL_WORLD:-0}" == "1" ]]; then
-  validation_args+=(--require-real-world)
+  validation_args+=(--require-real-world --require-second-reviewed)
 fi
 
 "${repo_root}/scripts/run-benchmark.sh" validate "${validation_args[@]}"

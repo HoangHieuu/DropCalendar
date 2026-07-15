@@ -9,17 +9,22 @@ from typing import Any, Iterable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .models import (
+    CLOUD_PROCESSORS,
     DIFFICULTIES,
+    EXPECTED_AMBIGUITY_FIELDS,
     FAILURE_REASONS,
     LANGUAGES,
+    MANIFEST_SCHEMA_VERSIONS,
     MODES,
     OUTCOMES,
     PROVENANCE_KINDS,
     SCHEMA_VERSION,
     SOURCE_CATEGORIES,
+    Annotation,
     BenchmarkItem,
     BenchmarkPrediction,
     ExpectedEvent,
+    ProcessingAuthorization,
     Provenance,
     ValidationSummary,
 )
@@ -29,6 +34,8 @@ ITEM_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{2,63}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CHALLENGING_LABELS = frozenset({"noisy", "low_resolution", "decorative_font"})
 CRITICAL_EVIDENCE_FIELDS = frozenset({"title", "start", "location"})
+CALIBRATION_ITEM_COUNT = 20
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
 class BenchmarkValidationError(ValueError):
@@ -61,11 +68,31 @@ def validate_corpus(
     *,
     manifest_path: Path,
     require_complete: bool = False,
+    require_calibration: bool = False,
     require_real_world: bool = False,
+    require_cloud_authorized: str | None = None,
+    require_second_reviewed: bool = False,
 ) -> ValidationSummary:
+    if require_complete and require_calibration:
+        raise BenchmarkValidationError(
+            "complete acceptance and calibration profiles are mutually exclusive"
+        )
+    if require_cloud_authorized is not None:
+        require_cloud_authorized = _require_choice(
+            require_cloud_authorized,
+            CLOUD_PROCESSORS,
+            "required cloud processor",
+        )
     corpus_root = manifest_path.resolve().parent
     for item in items:
         image_path = _safe_image_path(corpus_root, item.image, item.item_id)
+        if not item.provenance.redistributable and _path_is_within(
+            image_path, REPOSITORY_ROOT
+        ):
+            raise BenchmarkValidationError(
+                f"{item.item_id}: private non-redistributable image must stay outside "
+                "the repository"
+            )
         if not image_path.is_file():
             raise BenchmarkValidationError(
                 f"{item.item_id}: referenced image does not exist: {item.image}"
@@ -105,11 +132,68 @@ def validate_corpus(
         if failures:
             raise BenchmarkValidationError("incomplete benchmark corpus: " + "; ".join(failures))
 
+    if require_calibration and len(items) != CALIBRATION_ITEM_COUNT:
+        raise BenchmarkValidationError(
+            "calibration corpus requires exactly "
+            f"{CALIBRATION_ITEM_COUNT} items, found {len(items)}"
+        )
+
     if require_real_world and synthetic:
         raise BenchmarkValidationError(
             "real-world benchmark corpus must contain zero synthetic items, "
             f"found {synthetic}"
         )
+
+    if require_real_world:
+        legacy_items = sorted(item.item_id for item in items if item.schema_version != 2)
+        if legacy_items:
+            raise BenchmarkValidationError(
+                "real-world benchmark corpus requires manifest schema version 2; "
+                "legacy items: " + ", ".join(legacy_items)
+            )
+        if _path_is_within(manifest_path.resolve(), REPOSITORY_ROOT):
+            raise BenchmarkValidationError(
+                "real-world benchmark manifest and corpus must stay outside the repository"
+            )
+        unauthorized = sorted(
+            item.item_id
+            for item in items
+            if item.processing_authorization is None
+            or not item.processing_authorization.benchmark_use
+        )
+        if unauthorized:
+            raise BenchmarkValidationError(
+                "real-world benchmark items lack benchmark-use authorization: "
+                + ", ".join(unauthorized)
+            )
+
+    if require_cloud_authorized is not None:
+        unauthorized = sorted(
+            item.item_id
+            for item in items
+            if item.processing_authorization is None
+            or not item.processing_authorization.benchmark_use
+            or require_cloud_authorized
+            not in item.processing_authorization.cloud_processors
+        )
+        if unauthorized:
+            raise BenchmarkValidationError(
+                f"items lack {require_cloud_authorized} processing authorization: "
+                + ", ".join(unauthorized)
+            )
+
+    if require_second_reviewed:
+        unreviewed = sorted(
+            item.item_id
+            for item in items
+            if item.annotation is None
+            or not item.annotation.critical_fields_second_reviewed
+        )
+        if unreviewed:
+            raise BenchmarkValidationError(
+                "items have not completed critical-field second review: "
+                + ", ".join(unreviewed)
+            )
 
     return ValidationSummary(
         total=len(items),
@@ -169,26 +253,35 @@ def _read_jsonl(path: Path) -> list[tuple[int, dict[str, Any]]]:
 
 def _parse_item(row: dict[str, Any], line_number: int) -> BenchmarkItem:
     prefix = f"manifest line {line_number}"
+    if "schema_version" not in row:
+        raise BenchmarkValidationError(f"{prefix}: missing schema_version")
+    schema_version = _require_manifest_schema_version(row["schema_version"], prefix)
+    expected_keys = {
+        "schema_version",
+        "id",
+        "image",
+        "image_sha256",
+        "language",
+        "source_category",
+        "difficulties",
+        "captured_at",
+        "timezone",
+        "expected",
+        "provenance",
+        "sanitized",
+        "synthetic",
+    }
+    if schema_version == 2:
+        expected_keys |= {
+            "processing_authorization",
+            "expected_ambiguity_fields",
+            "annotation",
+        }
     _require_exact_keys(
         row,
-        {
-            "schema_version",
-            "id",
-            "image",
-            "image_sha256",
-            "language",
-            "source_category",
-            "difficulties",
-            "captured_at",
-            "timezone",
-            "expected",
-            "provenance",
-            "sanitized",
-            "synthetic",
-        },
+        expected_keys,
         prefix,
     )
-    _require_schema_version(row["schema_version"], prefix)
     item_id = _require_string(row["id"], f"{prefix}.id")
     if not ITEM_ID_PATTERN.fullmatch(item_id):
         raise BenchmarkValidationError(f"{prefix}.id: invalid stable identifier")
@@ -216,9 +309,30 @@ def _parse_item(row: dict[str, Any], line_number: int) -> BenchmarkItem:
     provenance = _parse_provenance(row["provenance"], f"{prefix}.provenance")
     sanitized = _require_bool(row["sanitized"], f"{prefix}.sanitized")
     synthetic = _require_bool(row["synthetic"], f"{prefix}.synthetic")
+    expected_ambiguity_fields: tuple[str, ...] = ()
+    processing_authorization: ProcessingAuthorization | None = None
+    annotation: Annotation | None = None
+    if schema_version == 2:
+        expected_ambiguity_fields = _require_string_list(
+            row["expected_ambiguity_fields"],
+            f"{prefix}.expected_ambiguity_fields",
+        )
+        unknown_ambiguity_fields = sorted(
+            set(expected_ambiguity_fields) - EXPECTED_AMBIGUITY_FIELDS
+        )
+        if unknown_ambiguity_fields:
+            raise BenchmarkValidationError(
+                f"{prefix}.expected_ambiguity_fields: unsupported values: "
+                + ", ".join(unknown_ambiguity_fields)
+            )
+        processing_authorization = _parse_processing_authorization(
+            row["processing_authorization"],
+            f"{prefix}.processing_authorization",
+        )
+        annotation = _parse_annotation(row["annotation"], f"{prefix}.annotation")
     if not sanitized:
         raise BenchmarkValidationError(f"{prefix}.sanitized: must be true")
-    if not provenance.redistributable:
+    if schema_version == 1 and not provenance.redistributable:
         raise BenchmarkValidationError(f"{prefix}.provenance.redistributable: must be true")
     if synthetic and provenance.kind != "generated":
         raise BenchmarkValidationError(
@@ -229,7 +343,7 @@ def _parse_item(row: dict[str, Any], line_number: int) -> BenchmarkItem:
             f"{prefix}: generated provenance requires synthetic=true"
         )
     return BenchmarkItem(
-        schema_version=SCHEMA_VERSION,
+        schema_version=schema_version,
         item_id=item_id,
         image=image,
         image_sha256=image_sha256,
@@ -242,6 +356,9 @@ def _parse_item(row: dict[str, Any], line_number: int) -> BenchmarkItem:
         provenance=provenance,
         sanitized=sanitized,
         synthetic=synthetic,
+        expected_ambiguity_fields=expected_ambiguity_fields,
+        processing_authorization=processing_authorization,
+        annotation=annotation,
     )
 
 
@@ -291,6 +408,53 @@ def _parse_provenance(value: Any, prefix: str) -> Provenance:
         redistributable=_require_bool(
             row["redistributable"], f"{prefix}.redistributable"
         ),
+    )
+
+
+def _parse_processing_authorization(
+    value: Any, prefix: str
+) -> ProcessingAuthorization:
+    row = _require_object(value, prefix)
+    _require_exact_keys(
+        row,
+        {"benchmark_use", "cloud_processors", "authorization_reference"},
+        prefix,
+    )
+    cloud_processors = _require_string_list(
+        row["cloud_processors"], f"{prefix}.cloud_processors"
+    )
+    unknown_processors = sorted(set(cloud_processors) - CLOUD_PROCESSORS)
+    if unknown_processors:
+        raise BenchmarkValidationError(
+            f"{prefix}.cloud_processors: unsupported values: "
+            + ", ".join(unknown_processors)
+        )
+    return ProcessingAuthorization(
+        benchmark_use=_require_bool(row["benchmark_use"], f"{prefix}.benchmark_use"),
+        cloud_processors=cloud_processors,
+        authorization_reference=_require_string(
+            row["authorization_reference"], f"{prefix}.authorization_reference"
+        ),
+    )
+
+
+def _parse_annotation(value: Any, prefix: str) -> Annotation:
+    row = _require_object(value, prefix)
+    _require_exact_keys(
+        row,
+        {"critical_fields_second_reviewed", "reviewed_at"},
+        prefix,
+    )
+    reviewed_at = _require_string(row["reviewed_at"], f"{prefix}.reviewed_at")
+    reviewed_datetime = _parse_datetime(reviewed_at, f"{prefix}.reviewed_at")
+    if reviewed_datetime.tzinfo is None:
+        raise BenchmarkValidationError(f"{prefix}.reviewed_at: explicit UTC offset required")
+    return Annotation(
+        critical_fields_second_reviewed=_require_bool(
+            row["critical_fields_second_reviewed"],
+            f"{prefix}.critical_fields_second_reviewed",
+        ),
+        reviewed_at=reviewed_at,
     )
 
 
@@ -393,6 +557,14 @@ def _safe_image_path(root: Path, relative: str, item_id: str) -> Path:
     return resolved
 
 
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -450,6 +622,20 @@ def _require_schema_version(value: Any, prefix: str) -> None:
         raise BenchmarkValidationError(
             f"{prefix}.schema_version: expected {SCHEMA_VERSION}"
         )
+
+
+def _require_manifest_schema_version(value: Any, prefix: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise BenchmarkValidationError(
+            f"{prefix}.schema_version: expected one of "
+            + ", ".join(str(version) for version in sorted(MANIFEST_SCHEMA_VERSIONS))
+        )
+    if value not in MANIFEST_SCHEMA_VERSIONS:
+        raise BenchmarkValidationError(
+            f"{prefix}.schema_version: expected one of "
+            + ", ".join(str(version) for version in sorted(MANIFEST_SCHEMA_VERSIONS))
+        )
+    return value
 
 
 def _require_object(value: Any, prefix: str) -> dict[str, Any]:

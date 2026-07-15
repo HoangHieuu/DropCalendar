@@ -5,6 +5,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSIONS = frozenset({1, 2})
 LANGUAGES = frozenset({"vietnamese", "english", "mixed"})
 MODES = frozenset({"local_only", "accuracy"})
 OUTCOMES = frozenset({"draft", "failure"})
@@ -39,6 +40,8 @@ FAILURE_REASONS = frozenset({
     "invalid_provider_output",
     "extraction_timeout",
 })
+EXPECTED_AMBIGUITY_FIELDS = frozenset({"title", "start", "end", "location"})
+CLOUD_PROCESSORS = frozenset({"openrouter"})
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,19 @@ class ExpectedEvent:
 
 
 @dataclass(frozen=True)
+class ProcessingAuthorization:
+    benchmark_use: bool
+    cloud_processors: tuple[str, ...]
+    authorization_reference: str
+
+
+@dataclass(frozen=True)
+class Annotation:
+    critical_fields_second_reviewed: bool
+    reviewed_at: str
+
+
+@dataclass(frozen=True)
 class BenchmarkItem:
     schema_version: int
     item_id: str
@@ -74,6 +90,9 @@ class BenchmarkItem:
     provenance: Provenance
     sanitized: bool
     synthetic: bool
+    expected_ambiguity_fields: tuple[str, ...] = ()
+    processing_authorization: ProcessingAuthorization | None = None
+    annotation: Annotation | None = None
 
 
 @dataclass(frozen=True)
