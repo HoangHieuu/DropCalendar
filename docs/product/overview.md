@@ -42,7 +42,6 @@ capture or receive screenshot
 - Scraping private social platforms.
 - Creating events without user confirmation.
 - Registering for events or purchasing tickets.
-- Processing multiple events from one screenshot.
 - Replacing Google Calendar or Apple Calendar.
 - Reading the user's full calendar without explicit permission.
 - Guaranteeing correct extraction from every low-quality image.
@@ -58,12 +57,17 @@ capture or receive screenshot
 5. A screenshot with no event evidence returns `No event detected`.
 6. SnapCal retains no app-owned raw screenshot copy by default; it never
    deletes or changes the user's original file.
+7. One screenshot may yield one to ten independent drafts, but every Calendar
+   write still requires its own explicit confirmation.
 
 ## MVP Definition
 
-The MVP is complete when macOS accepts an image by drag/drop or clipboard,
+The paid macOS beta is release-ready when macOS accepts an image by drag/drop or clipboard,
 extracts Vietnamese and English event details, opens an editable review,
 highlights uncertainty, creates a Google Calendar event after confirmation,
 adds valid reminders, preserves local drafts, warns on duplicates, retains no
-raw screenshot copy by default, and reports Vietnamese and English benchmark
-results separately.
+raw screenshot copy by default, keeps anonymous Local Only independent from
+all hosted services, and enforces webhook-owned Pro access and server-owned
+quota. A licensed real-world benchmark remains future public-quality evidence,
+not a blocker for the invited beta whose current extraction quality was
+explicitly accepted.

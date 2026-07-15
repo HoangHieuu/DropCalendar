@@ -31,25 +31,31 @@ normalization logic.
 | 2 | OCR, parsing, confidence, and benchmark reliability | In progress: deterministic rules and synthetic regression pass; licensed real-world dual-mode benchmark remains |
 | 3 | macOS menu-bar and notch-style drop zone | Implemented and code-proven: drag/drop, clipboard, review, and local draft history |
 | 4 | Trust hardening | Implemented and code-proven: reminders, explicit location lookup, local duplicates, encrypted opt-in screenshots, and deletion |
-| 5 | Mobile share flows | iOS and Android receive images and reuse review/calendar behavior |
-| 6 | Personalization and automation | preferences, local-only mode, and draft-safe shortcuts work |
+| 5 | Release and monetization | invited paid beta has hosted auth, Paddle entitlements, quota, privacy retention, direct signed updates, and bounded operations |
+| 6 | Mobile share flows | iOS and Android receive images and reuse review/calendar behavior |
+| 7 | Personalization and automation | preferences, local-only mode, and draft-safe shortcuts work |
 
 ## Build Priority
 
 1. Extraction correctness.
 2. Review safety.
 3. macOS drop-zone UX.
-4. Mobile surfaces.
-5. Automation.
+4. Paid beta and direct release.
+5. Mobile surfaces.
+6. Automation.
 
 ## Current Phase
 
-Implementation has reached the end of Phase 4, while the Phase 2 measurement
-gate remains open. Phase 3 and Phase 4 code do not convert synthetic fixtures
-into a real-world accuracy claim. The next release-blocking work is to replace
-or supplement the synthetic corpus with licensed, sanitized event screenshots,
-run both production modes, harden failures found by that report, and repeat the
-native menu-bar/relaunch/deletion smoke checklist.
+Implementation is in Phase 5, Release and Monetization. The hosted `/v2`
+boundary, database schema, account/paywall UI, webhook-owned entitlements,
+quota accounting, encrypted retry retention, infrastructure as code, CI/CD,
+Sparkle integration, and notarized-release automation are implemented. Live
+activation still requires the user-owned domain, provider projects/secrets,
+Paddle catalog and seller approval, Google verification configuration,
+Developer ID/notary credentials, and the bounded 20-request calibration.
+
+The Phase 2 licensed real-world measurement gate remains open for future public
+quality claims but is explicitly deferred from the 50-user invited beta.
 
 ## Scope Rule
 

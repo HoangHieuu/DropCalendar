@@ -51,12 +51,15 @@ evidence; otherwise it preserves the existing single-draft fallback.
 
 ### Accuracy Mode
 
-The user explicitly opts in before import. Send a bounded image plus local OCR
-and normalized layout boxes to the loopback extraction service. OpenRouter routes
+The user explicitly opts in before import. In production, send a metadata-free
+JPEG of at most 4 MiB plus at most 150 visual-order OCR lines and 20,000
+characters to the authenticated `/v2` service. The longest image edge is at
+most 2,048 pixels and smaller images are not enlarged. The existing loopback
+`/v1` contract remains for development and calibration. OpenRouter routes
 the request to `google/gemini-3.1-flash-lite`, which proposes one or more strict
 evidence-bearing events in source order. If it is unavailable or invalid, fall
-back visibly to the deterministic local candidates. Cloud OCR is not part of
-this slice.
+back visibly to the deterministic local candidates without consuming quota.
+Cloud OCR is not part of this slice.
 
 ## Provider Policy
 
@@ -78,6 +81,9 @@ this slice.
   application or domain layers.
 - Provider names, prompts, thresholds, and retries belong in configuration and
   infrastructure, not in normalization rules or UI state.
+- Production Accuracy requires a SnapCal bearer session and an idempotency key.
+  One screenshot reserves one unit even when it yields several drafts. Only a
+  valid non-empty cloud result consumes that unit.
 
 ## Required Behavior
 

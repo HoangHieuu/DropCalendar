@@ -9,6 +9,8 @@ These files are the living product surface derived from the source snapshot in
   ambiguity policy.
 - `review-calendar.md` — mandatory review and Google Calendar mapping.
 - `privacy-quality.md` — privacy, retention, benchmarks, and quality targets.
+- `billing-release.md` — Free/Pro entitlements, quota, billing, account, and
+  direct-distribution contracts.
 - `platform-roadmap.md` — platform-specific UX and phased delivery.
 
 `SPEC.md` remains a historical source snapshot. When accepted behavior changes,

@@ -3,30 +3,38 @@
 ## Current State
 
 The repository contains a macOS 14 SwiftUI menu-bar app, XCTest target, a
-versioned benchmark package, and a loopback FastAPI extraction service. Local
-Only keeps extraction on-device. Opt-in
-Accuracy Mode sends a bounded JPEG plus layout-aware Apple Vision OCR to the
-local service, which owns the OpenRouter credential and validates strict
-structured output from `google/gemini-3.1-flash-lite`. Minimized draft metadata
-persists in owner-only SQLite; full OCR and screenshots are excluded. Optional
-screenshot history is default-off and uses an AES-GCM vault whose key is in the
-macOS Keychain.
+versioned benchmark package, and a FastAPI modular monolith. Local Only keeps
+extraction on-device. During development, Accuracy Mode can use the preserved
+loopback `/v1` contract. The production `/v2` contract accepts a bounded
+multipart JPEG plus layout-aware Apple Vision OCR, authenticates an invited
+SnapCal device session, atomically reserves quota in PostgreSQL, and calls
+OpenRouter with strict structured output from
+`google/gemini-3.1-flash-lite`. Minimized draft metadata persists in owner-only
+SQLite; full OCR and screenshots are excluded. Optional screenshot history is
+default-off and uses an AES-GCM vault whose key is in the macOS Keychain.
 Google desktop OAuth with PKCE uses the same loopback service for secret-bearing
 token exchange and keeps Calendar REST creation behind explicit confirmation.
 Refresh-token storage is signature-aware: team-signed builds use Data Protection
 Keychain and ad-hoc development builds use the local login Keychain.
-The default macOS target is now Apple Development signed for team `HKUD5AT6V6`
-under `com.hkud5at6v6.snapcal`, with an explicit Keychain access group. The
-login-Keychain path remains a fallback for deliberately ad-hoc builds.
-There is no production service deployment or server database. The checked-in
-100-image corpus is generated regression data, not a licensed real-world
-accuracy corpus.
+The default macOS target uses Apple Development signing for local work and a
+separate Developer ID Release configuration for team `HKUD5AT6V6` under
+`com.hkud5at6v6.snapcal`, with an explicit Keychain access group. The
+login-Keychain path remains a fallback for deliberately ad-hoc builds. Sparkle
+is Release-only and fail-closed until a real HTTPS appcast and EdDSA public key
+are supplied.
+
+The repository now defines the production service, Alembic schema, Cloud Run
+container, Terraform, CI/CD, release automation, and operations runbook. It
+does not claim that external GCP, Neon, Paddle, Google, OpenRouter, DNS, or
+Apple resources have been provisioned. The checked-in 100-image corpus remains
+generated regression data, not a licensed real-world accuracy corpus; the
+licensed benchmark is deferred from the paid-beta release gate.
 
 Extraction returns one to ten ordered drafts. The shared model reviews one
 selected draft at a time, stores sibling Calendar lifecycle independently, and
 requires a separate confirmation and provider call for every event.
 
-Real-world benchmark acceptance uses an external manifest-v2 corpus. Private
+If resumed, real-world benchmark acceptance uses an external manifest-v2 corpus. Private
 non-redistributable images are forbidden from repository-owned directories;
 each row carries benchmark/cloud authorization, expected ambiguity labels, and
 independent critical-field review. The normal `/v1/extract` response is schema
@@ -64,6 +72,34 @@ FastAPI and OpenRouter structured extraction are now implemented for local
 development. Google Cloud Vision OCR fallback and Google Places/Geocoding
 remain deferred target choices.
 
+## Production Accuracy Boundary
+
+```text
+macOS Accuracy request
+  -> Google identity plus rotating SnapCal device session
+  -> multipart JPEG and bounded OCR metadata
+  -> reserve transaction: entitlement + invite + quota + limits + idempotency
+  -> one same-model OpenRouter request with provider fallback
+  -> validate one-to-ten non-empty event proposals
+  -> finalize transaction: consume one screenshot unit or release reservation
+  -> return plaintext once and retain only a device-sealed retry envelope
+  -> expire the envelope after 15 minutes
+```
+
+Paddle's signed, deduplicated webhooks own the local subscription cache.
+Browser redirects and locally cached UI state never grant Accuracy access. The
+successful extraction hot path uses exactly two database transactions and
+never queries Paddle or OpenRouter for entitlement. A screenshot consumes one
+unit even when it contains multiple events; failure and Local Only fallback
+consume none.
+
+The backend never creates Calendar events. Calendar access and refresh tokens
+remain in the app's Keychain. A production client sends a refresh token only
+transiently through the authenticated `/v2/auth/google/token` broker; the
+backend forwards it to Google without persistence. The macOS client continues
+to perform one Google Calendar call only after explicit confirmation for that
+event.
+
 ## Calendar Write Boundary
 
 ```text
@@ -71,17 +107,20 @@ reviewed EventDraft
   -> pure validation/mapping
   -> awaitingConfirmation (zero provider calls)
   -> explicit user confirmation
-  -> authorize or refresh through bounded loopback token broker
+  -> authorize or refresh through development loopback or authenticated hosted token broker
   -> POST primary calendar event
   -> success receipt or recoverable failure with draft preserved
 ```
 
 The app embeds only the public desktop OAuth client ID. It never reads or
-bundles the downloaded credential JSON or client secret. The local FastAPI
-service reads that JSON from an explicit ignored path and adds the secret only
-when forwarding a token request to Google. The system browser handles Google
-sign-in; a short-lived `127.0.0.1` listener receives the callback. The requested
-scope is limited to creating events in calendars the user owns.
+bundles the downloaded credential JSON or client secret. FastAPI reads that
+JSON from an explicit ignored path or a mounted production secret and adds the
+secret only when forwarding a token request to Google. Development uses
+`/v1/google-oauth/token`; configured production builds use authenticated
+`/v2/auth/google/token` and never target the loopback helper. The system browser
+handles Google sign-in; a short-lived `127.0.0.1` listener receives the
+callback. The requested scope is limited to creating events in calendars the
+user owns.
 
 ## Product Boundaries
 
@@ -138,8 +177,9 @@ untrusted image
   -> local OCR
   -> deterministic local candidate with layout boxes
   -> Local Only returns the local candidate, or
-  -> Accuracy Mode sends image + OCR to 127.0.0.1 proxy
-  -> proxy calls OpenRouter Chat Completions with a strict JSON Schema
+  -> Accuracy Mode sends bounded JPEG + OCR to loopback `/v1` in development
+     or authenticated hosted `/v2` in production
+  -> FastAPI calls OpenRouter Chat Completions with a strict JSON Schema
   -> strict versioned one-to-ten proposal validation and local/cloud disagreement checks
   -> normalization and deterministic consistency checks
   -> confidence and ambiguity rules
@@ -184,7 +224,13 @@ Parse and validate all unknown data at entry:
   transitions, and Disconnect deletes both. The default target's application
   identifier and Keychain access group are provisioned from its Apple team and
   bundle identifier. Access tokens remain in memory.
-- PostgreSQL is deferred until a server-owned metadata need is proven.
+- PostgreSQL owns invited-beta identity, device sessions, plan configuration,
+  lean subscription state, atomic quota, idempotency, redacted audit metadata,
+  and a client-encrypted 15-minute retry envelope. It never stores screenshots,
+  OCR text, prompts, plaintext event fields, Google tokens, or provider keys.
+- SQLAlchemy 2 async uses the Neon pooled endpoint with a maximum four-connection
+  pool per application instance. Alembic runs as a one-off deployment job; the
+  application never migrates production during startup.
 - Screenshot history is disabled by default. If explicitly enabled, app-owned
   image copies use an AES-GCM local vault and a Keychain key. Clear All removes
   draft rows, vault files, and that key; user originals are outside SnapCal's
@@ -206,15 +252,19 @@ retention records and operational logs remain separate concerns.
 2. Contract tests for provider adapters and strict payload parsing.
 3. Integration tests for local persistence and calendar failure/retry behavior.
 4. Xcode/Simulator or macOS platform tests for import, review, and UI state.
-5. Curated benchmark evaluation for extraction accuracy and latency.
-   Accuracy evaluation uses a dedicated free-port loopback process, provider
-   key-limit preflight, and redacted cost/run metadata.
-6. End-to-end proof that no calendar write occurs before user confirmation.
+5. PostgreSQL-backed contract tests for session rotation, Paddle ordering,
+   idempotency, quota concurrency, retry expiry, and 50-user provider-fake load.
+6. A bounded 20-request live calibration for cost and latency before checkout;
+   this is operational validation, not training or an accuracy benchmark.
+7. End-to-end proof that no calendar write occurs before user confirmation.
 
 ## Remaining Decisions
 
-- Production hosting and secret-management boundary if Accuracy Mode moves
-  beyond the current loopback development service.
-- Versioned event-draft schema transport.
-- Real-world benchmark asset licensing and private-data sanitization.
-- Whether any server-owned metadata requires PostgreSQL; default is no.
+- Selection and acquisition of the SnapCal-owned domain.
+- Completion of live GCP, Neon, Paddle, Google OAuth, OpenRouter, DNS, Developer
+  ID, notarization, and Sparkle-key activation by an authorized operator.
+- Public-launch timing after Google OAuth verification and beta evidence.
+- Whether measured latency requires one minimum Cloud Run instance, disabling
+  Neon scale-to-zero, or eventually adding a cache. The default remains no.
+- Real-world benchmark licensing and sanitation if accuracy claims are resumed;
+  it is not a paid-beta blocker.

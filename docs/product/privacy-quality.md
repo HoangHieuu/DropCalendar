@@ -15,6 +15,15 @@
   provider.
 - The local service binds to `127.0.0.1` by default, loads the OpenRouter key
   from its environment, and does not log or persist request bodies.
+- The hosted service never persists screenshots, submitted OCR, prompts,
+  plaintext events, Google tokens, or provider credentials. It stores only
+  redacted request/cost/latency/quota metadata and a device-encrypted retry
+  envelope that expires after 15 minutes.
+- Each installation owns a Curve25519 retry key in Keychain. The server seals
+  the structured response to its public key and cannot decrypt the stored
+  envelope.
+- Redacted request and audit metadata is aggregated and removed after 90 days.
+  Exact expiry tasks are backed by an idempotent daily sweep.
 - Failed extraction keeps no new durable screenshot copy by default.
 - Screenshot history is opt-in, local-only, and encrypted at rest with
   AES-GCM. Its 256-bit key is stored in the macOS Keychain; the vault directory
@@ -46,9 +55,11 @@ The checked-in version-1 corpus currently contains 100 project-generated,
 sanitized, redistributable fixtures and supports synthetic regression claims
 only. Local Only runs the production Apple Vision and deterministic extractor
 sources. Accuracy Mode has a separate production-source runner that requires
-an explicit cloud/cost opt-in. Phase 2 real-world accuracy acceptance still
-requires a licensed non-synthetic corpus and complete Local Only and Accuracy
-reports over that corpus.
+an explicit cloud/cost opt-in. Licensed real-world acceptance still requires a
+non-synthetic corpus and complete Local Only and Accuracy reports. That work is
+deferred and is not an invited paid-beta release blocker because current
+quality was accepted. It remains mandatory before a public benchmark claim or
+a major provider/prompt/parser change that could invalidate accepted quality.
 
 Real-world acceptance uses manifest version 2 in an owner-controlled directory
 outside Git. Each item must be non-synthetic, hash-verified, sanitized,
@@ -92,3 +103,15 @@ latency, duplicate-warning accuracy,
 correction rate by field, ambiguity detection, and critical-field error rate.
 Production logs must use counts/identifiers and redacted metadata rather than
 raw screenshot or OCR content.
+
+## Paid Beta Cost And Latency Gates
+
+- Run exactly 20 existing sanitized fixtures before enabling live checkout.
+- Mean valid-extraction provider cost must be at most US$0.005; p95 at most
+  US$0.01; projected 100-call mean at most US$0.50.
+- Accuracy median must be under five seconds and p95 under ten seconds.
+- Warm backend overhead must be p95 under 500 ms and each quota transaction
+  p95 under 100 ms.
+- The dedicated OpenRouter key has a US$25 monthly hard limit. Recorded spend
+  blocks new reservations at the same ceiling and alerts at 70%, 85%, and
+  100%.
