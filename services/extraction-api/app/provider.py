@@ -11,6 +11,16 @@ import httpx
 from .contracts import EventProposal, EventProposalSet, ExtractionRequest
 
 
+@dataclass(frozen=True)
+class ProviderAccounting:
+    """Usage metadata available even when the proposal itself is rejected."""
+
+    request_cost_usd: Decimal | None
+    generation_id: str | None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
 class ProviderUnavailableError(RuntimeError):
     pass
 
@@ -20,11 +30,25 @@ class ProviderRejectedError(RuntimeError):
 
 
 class InvalidProviderOutputError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        accounting: ProviderAccounting | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.accounting = accounting
 
 
 class ProviderUsageUnavailableError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        accounting: ProviderAccounting | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.accounting = accounting
 
 
 @dataclass(frozen=True)
@@ -32,6 +56,8 @@ class ProviderExtractionResult:
     events: list[EventProposal]
     request_cost_usd: Decimal
     generation_id: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +105,7 @@ class OpenRouterProvider:
         http_referer: str | None = None,
         app_name: str | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
         key = api_key.strip()
         selected_model = model.strip()
@@ -96,7 +123,12 @@ class OpenRouterProvider:
         self._key_endpoint = f"{normalized_base_url}/key"
         self._http_referer = (http_referer or "").strip()
         self._app_name = (app_name or "").strip()
-        self._transport = transport
+        self._client = client or httpx.AsyncClient(
+            timeout=httpx.Timeout(25.0),
+            transport=transport,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+        self._owns_client = client is None
 
     @property
     def ready(self) -> bool:
@@ -110,29 +142,97 @@ class OpenRouterProvider:
         self, request: ExtractionRequest
     ) -> ProviderExtractionResult:
         envelope = await self._completion_envelope(request)
-        events = self._events_from_envelope(envelope)
-        generation_id = envelope.get("id")
-        if not isinstance(generation_id, str) or not generation_id.strip():
-            raise ProviderUsageUnavailableError(
-                "OpenRouter response omitted the generation identifier"
-            )
+        accounting = await self._accounting_from_envelope(envelope)
         try:
-            request_cost = _optional_nonnegative_decimal(
-                (envelope.get("usage") or {}).get("cost")
-                if isinstance(envelope.get("usage"), dict)
-                else None
-            )
-        except (TypeError, ValueError, InvalidOperation) as error:
-            raise ProviderUsageUnavailableError(
-                "OpenRouter response contained invalid usage cost"
+            events = self._events_from_envelope(envelope)
+        except InvalidProviderOutputError as error:
+            raise InvalidProviderOutputError(
+                str(error), accounting=accounting
             ) from error
-        if request_cost is None:
-            request_cost = await self._generation_cost(generation_id.strip())
+        assert accounting.request_cost_usd is not None
+        assert accounting.generation_id is not None
         return ProviderExtractionResult(
             events=events,
-            request_cost_usd=request_cost,
-            generation_id=generation_id.strip(),
+            request_cost_usd=accounting.request_cost_usd,
+            generation_id=accounting.generation_id,
+            input_tokens=accounting.input_tokens,
+            output_tokens=accounting.output_tokens,
         )
+
+    async def _accounting_from_envelope(
+        self, envelope: dict[str, Any]
+    ) -> ProviderAccounting:
+        raw_generation_id = envelope.get("id")
+        generation_id = (
+            raw_generation_id.strip()
+            if isinstance(raw_generation_id, str) and raw_generation_id.strip()
+            else None
+        )
+        usage = envelope.get("usage") if isinstance(envelope.get("usage"), dict) else {}
+        try:
+            request_cost = _optional_nonnegative_decimal(usage.get("cost"))
+        except (TypeError, ValueError, InvalidOperation) as error:
+            raise ProviderUsageUnavailableError(
+                "OpenRouter response contained invalid usage cost",
+                accounting=ProviderAccounting(
+                    request_cost_usd=None,
+                    generation_id=generation_id,
+                ),
+            ) from error
+        try:
+            input_tokens = _optional_nonnegative_int(usage.get("prompt_tokens"))
+            output_tokens = _optional_nonnegative_int(usage.get("completion_tokens"))
+        except ProviderUsageUnavailableError as error:
+            raise ProviderUsageUnavailableError(
+                str(error),
+                accounting=ProviderAccounting(
+                    request_cost_usd=request_cost,
+                    generation_id=generation_id,
+                ),
+            ) from error
+        if request_cost is None:
+            if generation_id is None:
+                raise ProviderUsageUnavailableError(
+                    "OpenRouter response omitted cost and generation identifier",
+                    accounting=ProviderAccounting(
+                        request_cost_usd=None,
+                        generation_id=None,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    ),
+                )
+            try:
+                request_cost = await self._generation_cost(generation_id)
+            except ProviderUsageUnavailableError as error:
+                raise ProviderUsageUnavailableError(
+                    str(error),
+                    accounting=ProviderAccounting(
+                        request_cost_usd=None,
+                        generation_id=generation_id,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    ),
+                ) from error
+        if generation_id is None:
+            raise ProviderUsageUnavailableError(
+                "OpenRouter response omitted the generation identifier",
+                accounting=ProviderAccounting(
+                    request_cost_usd=request_cost,
+                    generation_id=None,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                ),
+            )
+        return ProviderAccounting(
+            request_cost_usd=request_cost,
+            generation_id=generation_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+
+    async def close(self) -> None:
+        if self._owns_client:
+            await self._client.aclose()
 
     async def key_status(self) -> ProviderKeyStatus:
         response = await self._send("GET", self._key_endpoint)
@@ -227,17 +327,13 @@ class OpenRouterProvider:
         if self._app_name:
             headers["X-OpenRouter-Title"] = self._app_name
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(25.0),
-                transport=self._transport,
-            ) as client:
-                return await client.request(
-                    method,
-                    endpoint,
-                    headers=headers,
-                    json=json_body,
-                    params=query,
-                )
+            return await self._client.request(
+                method,
+                endpoint,
+                headers=headers,
+                json=json_body,
+                params=query,
+            )
         except (httpx.TimeoutException, httpx.NetworkError) as error:
             raise ProviderUnavailableError("OpenRouter request failed") from error
         except httpx.HTTPError as error:
@@ -258,9 +354,13 @@ class OpenRouterProvider:
             "model": self.model,
             "messages": [
                 {
+                    "role": "system",
+                    "content": _SYSTEM_EXTRACTION_PROMPT,
+                },
+                {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": _extraction_prompt(request)},
+                        {"type": "text", "text": _dynamic_extraction_prompt(request)},
                         {
                             "type": "image_url",
                             "image_url": {"url": image_data_url},
@@ -276,9 +376,19 @@ class OpenRouterProvider:
                     "schema": _event_response_schema(),
                 },
             },
-            "provider": {"require_parameters": True},
+            "provider": {
+                "allow_fallbacks": True,
+                "require_parameters": True,
+                "data_collection": "deny",
+                "zdr": True,
+                "sort": "latency",
+                "max_price": {"prompt": 0.30, "completion": 1.80},
+            },
+            "usage": {"include": True},
+            "reasoning": {"effort": "minimal"},
             "stream": False,
             "temperature": 0,
+            "max_completion_tokens": 2_500,
         }
 
 
@@ -293,27 +403,37 @@ def _optional_nonnegative_decimal(value: Any) -> Decimal | None:
     return decimal_value
 
 
-def _extraction_prompt(request: ExtractionRequest) -> str:
+def _optional_nonnegative_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ProviderUsageUnavailableError("OpenRouter token usage is invalid")
+    return value
+
+
+_SYSTEM_EXTRACTION_PROMPT = """
+You extract one or more calendar events from screenshots for mandatory human review.
+Use visual hierarchy and OCR evidence together. Preserve source order and return at most 10 events.
+
+Safety rules:
+- Return a separate event only when independently actionable with its own visible date evidence.
+- Do not split agendas, sponsor lists, or numbered prose without distinct event evidence.
+- Never invent a date or time; every proposed date/time cites visible evidence_text.
+- A date without a clock time is all-day. Morning/evening/sáng/tối are not clock times.
+- Date-range ends are inclusive from the user's perspective.
+- Preserve Vietnamese and English faithfully.
+- Missing or uncertain fields are null and represented by an ambiguity.
+- Keep descriptions concise and event-relevant.
+""".strip()
+
+
+def _dynamic_extraction_prompt(request: ExtractionRequest) -> str:
     ocr_evidence = "\n".join(
         f"[{index}] confidence={line.confidence:.3f} "
         f"box={line.box.model_dump() if line.box else None} text={line.text}"
         for index, line in enumerate(request.ocr_lines)
     )
     return f"""
-You extract one or more calendar events from an image for mandatory human review.
-Use the image's visual hierarchy together with the OCR evidence. Logos, sponsors, and organizers are not the event title when a prominent event heading exists.
-
-Safety rules:
-- Return a separate event only when it is independently actionable and has its own visible date evidence.
-- Preserve the source reading order. Return at most 10 events.
-- Do not split schedules, agendas, sponsor lists, or numbered prose unless each item is a distinct calendar event.
-- Never invent a date or time. Every proposed date/time must cite visible evidence_text.
-- If an event has a date but no clock time, set is_all_day=true and leave both times null. Words such as evening, morning, tối, or sáng are not clock times.
-- Date-range end is inclusive from the user's perspective.
-- Preserve Vietnamese and English text faithfully.
-- A missing or uncertain field must be null and represented by an ambiguity.
-- Keep description concise; do not copy sponsor lists unless event-relevant.
-
 Context:
 - captured_at: {request.captured_at.isoformat()}
 - user_time_zone: {request.time_zone}

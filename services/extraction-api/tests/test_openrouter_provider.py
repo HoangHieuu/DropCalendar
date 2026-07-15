@@ -106,7 +106,8 @@ def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_sch
 
     body = captured["body"]
     assert isinstance(body, dict)
-    content = body["messages"][0]["content"]
+    assert body["messages"][0]["role"] == "system"
+    content = body["messages"][1]["content"]
     assert captured["authorization"] == "Bearer test-openrouter-key"
     assert captured["referer"] == "https://snapcal.example"
     assert captured["title"] == "SnapCal"
@@ -119,6 +120,12 @@ def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_sch
     assert event_array["minItems"] == 1
     assert event_array["maxItems"] == 10
     assert body["provider"]["require_parameters"] is True
+    assert body["provider"]["allow_fallbacks"] is True
+    assert body["provider"]["data_collection"] == "deny"
+    assert body["provider"]["zdr"] is True
+    assert body["provider"]["max_price"] == {"prompt": 0.30, "completion": 1.80}
+    assert body["usage"] == {"include": True}
+    assert body["max_completion_tokens"] == 2_500
     assert len(result) == 1
     assert result[0].title.value == "Agentic AI Build Week"
 
@@ -255,6 +262,36 @@ def test_openrouter_fails_closed_when_cost_is_unavailable() -> None:
 
     with pytest.raises(ProviderUsageUnavailableError):
         asyncio.run(provider.extract_with_usage(extraction_request()))
+
+
+def test_openrouter_preserves_cost_when_paid_output_is_invalid() -> None:
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "id": "gen-invalid-output",
+                    "choices": [{"message": {"content": '{"events":[]}'}}],
+                    "usage": {
+                        "cost": 0.0042,
+                        "prompt_tokens": 800,
+                        "completion_tokens": 40,
+                    },
+                },
+            )
+        ),
+    )
+
+    with pytest.raises(InvalidProviderOutputError) as caught:
+        asyncio.run(provider.extract_with_usage(extraction_request()))
+
+    assert caught.value.accounting is not None
+    assert caught.value.accounting.request_cost_usd == Decimal("0.0042")
+    assert caught.value.accounting.generation_id == "gen-invalid-output"
+    assert caught.value.accounting.input_tokens == 800
+    assert caught.value.accounting.output_tokens == 40
 
 
 def test_openrouter_reads_current_key_spending_limit() -> None:

@@ -1,13 +1,28 @@
 from __future__ import annotations
 
 import os
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+
+from .api_errors import APIError
+from .api_v2 import create_v2_router
+from .billing import BillingService, PaddleClient
+from .config import ConfigurationError, ProductionSettings
+from .database import Database
+from .identity import GoogleIdentityBroker
+from .production_service import ProductionService
+from .tasks import (
+    CloudTaskQueue,
+    CloudTasksPaddleDispatcher,
+    CloudTasksResultCleanupScheduler,
+    InternalTaskAuthorizer,
+)
 
 from .benchmark import (
     BenchmarkBudget,
@@ -47,8 +62,13 @@ from .provider import (
 )
 
 
-ROOT_DIRECTORY = Path(__file__).resolve().parents[3]
-load_dotenv(ROOT_DIRECTORY / ".env", override=False)
+SERVICE_DIRECTORY = Path(__file__).resolve().parent.parent
+REPOSITORY_DIRECTORY = SERVICE_DIRECTORY.parent.parent
+# Local development keeps shared configuration at the repository root while
+# the production container has `/app` as its service root. Neither lookup may
+# assume a fixed number of parent directories exists.
+load_dotenv(REPOSITORY_DIRECTORY / ".env", override=False)
+load_dotenv(SERVICE_DIRECTORY / ".env", override=False)
 
 DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -99,6 +119,8 @@ def create_app(
     provider: ExtractionProvider | None = None,
     oauth_broker: OAuthTokenBroker | None = None,
     benchmark_budget: BenchmarkBudget | None = None,
+    production_service: ProductionService | None = None,
+    billing_service: BillingService | None = None,
 ) -> FastAPI:
     selected_provider = provider or configured_provider()
     selected_oauth_broker = oauth_broker or configured_oauth_broker()
@@ -112,17 +134,96 @@ def create_app(
                 "benchmark mode requires an OpenRouter provider with usage accounting"
             )
         benchmark_provider = selected_provider  # type: ignore[assignment]
+    selected_production_service = production_service
+    task_queue: CloudTaskQueue | None = None
+    task_authorizer: InternalTaskAuthorizer | None = None
+    if selected_production_service is None:
+        selected_production_service = configured_production_service(selected_provider)
+    if (
+        selected_production_service is not None
+        and selected_production_service.settings.environment != "test"
+    ):
+        task_queue = CloudTaskQueue(selected_production_service.settings)
+        selected_production_service.result_cleanup_scheduler = (
+            CloudTasksResultCleanupScheduler(task_queue)
+        )
+        task_authorizer = InternalTaskAuthorizer(
+            audience=selected_production_service.settings.api_base_url,
+            service_account_email=(
+                selected_production_service.settings.cloud_tasks_service_account or ""
+            ),
+        )
+    selected_billing_service = billing_service
+    if selected_billing_service is None and selected_production_service is not None:
+        selected_billing_service = BillingService(
+            settings=selected_production_service.settings,
+            database=selected_production_service.database,
+            paddle=PaddleClient(
+                api_key=selected_production_service.settings.paddle_api_key,
+                environment=selected_production_service.settings.paddle_environment,
+                price_id=selected_production_service.settings.paddle_price_id,
+            ),
+            dispatcher=(
+                CloudTasksPaddleDispatcher(task_queue)
+                if task_queue is not None
+                else None
+            ),
+        )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        yield
+        if selected_production_service is not None:
+            await selected_production_service.close()
+        if selected_billing_service is not None:
+            await selected_billing_service.close()
+        if task_queue is not None:
+            await task_queue.close()
+        close_provider = getattr(selected_provider, "close", None)
+        if close_provider is not None:
+            await close_provider()
+
     app = FastAPI(
         title="SnapCal Extraction API",
         version="0.1.0",
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
+    )
+
+    app.include_router(
+        create_v2_router(
+            selected_production_service,
+            selected_billing_service,
+            task_authorizer,
+            selected_oauth_broker,
+        )
     )
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse(model=selected_provider.model, ready=selected_provider.ready)
+
+    @app.get("/health/live")
+    async def health_live() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/health/ready")
+    async def health_ready() -> JSONResponse:
+        database_ready = (
+            selected_production_service is not None
+            and await selected_production_service.database.is_ready()
+        )
+        ready = bool(database_ready and selected_provider.ready)
+        return JSONResponse(
+            status_code=200 if ready else 503,
+            content={
+                "status": "ok" if ready else "unavailable",
+                "database": bool(database_ready),
+                "provider": bool(selected_provider.ready),
+            },
+        )
 
     @app.post("/v1/extract", response_model=ExtractionResponse)
     async def extract(request: ExtractionRequest) -> ExtractionResponse:
@@ -282,21 +383,111 @@ def create_app(
                 },
             ) from None
 
+    @app.exception_handler(APIError)
+    async def api_error_handler(_: Request, error: APIError) -> JSONResponse:
+        return JSONResponse(
+            status_code=error.status_code,
+            content={
+                "error": {
+                    "code": error.code,
+                    "message": error.message,
+                    "retryable": error.retryable,
+                    "request_id": str(error.request_id),
+                }
+            },
+        )
+
     @app.exception_handler(ValueError)
-    async def value_error_handler(_: Any, __: ValueError) -> JSONResponse:
+    async def value_error_handler(request: Request, __: ValueError) -> JSONResponse:
+        if request.url.path.startswith("/v2/"):
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "The request is invalid.",
+                        "retryable": False,
+                        "request_id": str(uuid.uuid4()),
+                    }
+                },
+            )
         return JSONResponse(
             status_code=422,
             content={"detail": {"code": "invalid_request", "message": "The extraction request is invalid."}},
         )
 
     @app.exception_handler(RequestValidationError)
-    async def request_validation_error_handler(_: Any, __: RequestValidationError) -> JSONResponse:
+    async def request_validation_error_handler(request: Request, __: RequestValidationError) -> JSONResponse:
+        if request.url.path.startswith("/v2/"):
+            request_id = str(uuid.uuid4())
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": {
+                        "code": "invalid_request",
+                        "message": "The request is invalid.",
+                        "retryable": False,
+                        "request_id": request_id,
+                    }
+                },
+            )
         return JSONResponse(
             status_code=422,
             content={"detail": {"code": "invalid_request", "message": "The request is invalid."}},
         )
 
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(request: Request, __: Exception) -> JSONResponse:
+        if request.url.path.startswith("/v2/"):
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "code": "internal_error",
+                        "message": "SnapCal could not complete the request.",
+                        "retryable": True,
+                        "request_id": str(uuid.uuid4()),
+                    }
+                },
+            )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": {
+                    "code": "internal_error",
+                    "message": "SnapCal could not complete the request.",
+                }
+            },
+        )
+
     return app
+
+
+def configured_production_service(
+    provider: ExtractionProvider,
+) -> ProductionService | None:
+    settings = ProductionSettings.from_environment()
+    if settings is None:
+        return None
+    if not (
+        hasattr(provider, "extract_with_usage")
+        and hasattr(provider, "key_status")
+    ):
+        raise ConfigurationError(
+            "production mode requires provider usage accounting"
+        )
+    credential_path = os.environ.get("GOOGLE_OAUTH_CREDENTIALS_FILE", "").strip()
+    if not credential_path:
+        raise ConfigurationError(
+            "GOOGLE_OAUTH_CREDENTIALS_FILE is required in production mode"
+        )
+    identity = GoogleIdentityBroker(Path(credential_path))
+    return ProductionService(
+        settings=settings,
+        database=Database(settings),
+        identity=identity,
+        provider=provider,  # type: ignore[arg-type]
+    )
 
 
 def _benchmark_usage(snapshot: BenchmarkUsageSnapshot) -> BenchmarkUsage:
