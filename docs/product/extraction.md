@@ -27,12 +27,14 @@ image validation and metadata
   -> Vietnamese-English normalization
   -> date/time/timezone and location parsing
   -> field evidence, confidence, and ambiguity assembly
-  -> reviewable event draft
+  -> one or more reviewable event drafts
 ```
 
-The extraction boundary must return a typed result: either a draft, a clear
-`No event detected` outcome, or a structured failure. It must not return an
-unvalidated model payload to the client.
+The extraction boundary must return a typed result: either an ordered,
+non-empty collection of one to ten drafts, a clear `No event detected` outcome,
+or a structured failure. It must not return an unvalidated model payload to the
+client. One screenshot may contain multiple events even though multiple input
+images are not processed as a batch.
 
 ## Modes
 
@@ -43,16 +45,18 @@ and review without sending the image or OCR off-device. This is the default.
 Local Only is not a language model: it uses bounded Vietnamese-English rules
 for common date, time, title, and location cues and may miss broader semantic
 context. The import screen must state that limitation and recommend explicit
-Accuracy Mode opt-in when the wording or layout is complex.
+Accuracy Mode opt-in when the wording or layout is complex. Local Only splits
+numbered blocks only when at least two blocks each carry independent date
+evidence; otherwise it preserves the existing single-draft fallback.
 
 ### Accuracy Mode
 
 The user explicitly opts in before import. Send a bounded image plus local OCR
 and normalized layout boxes to the loopback extraction service. OpenRouter routes
-the request to `google/gemini-3.1-flash-lite`, which proposes a strict
-evidence-bearing event. If it is unavailable or invalid,
-fall back visibly to the deterministic local candidate. Cloud OCR is not part
-of this slice.
+the request to `google/gemini-3.1-flash-lite`, which proposes one or more strict
+evidence-bearing events in source order. If it is unavailable or invalid, fall
+back visibly to the deterministic local candidates. Cloud OCR is not part of
+this slice.
 
 ## Provider Policy
 
@@ -65,6 +69,11 @@ of this slice.
 - The OpenRouter key belongs only to the FastAPI process environment. The macOS app
   sends no provider credential and accepts only HTTPS or loopback HTTP service
   addresses.
+- The app-facing `/v1/extract` response schema version 2 contains an `events`
+  array of one to ten proposals and no benchmark accounting. The macOS client
+  still decodes the version-1 single `event` response during local rolling
+  upgrades. Explicit benchmark mode adds a separate loopback-only endpoint
+  that verifies a provider-limited key and enforces cumulative cost.
 - Provider output is untrusted boundary data and must be parsed before entering
   application or domain layers.
 - Provider names, prompts, thresholds, and retries belong in configuration and
@@ -77,6 +86,9 @@ of this slice.
 - Trigger fallback when local evidence is insufficient.
 - Mark disagreements on date, time, or location as ambiguities.
 - Never invent a date when the image contains no date evidence.
+- Never treat vague day-part words such as `tối` or `evening` as clock times.
+- Preserve source order when one image yields multiple independently
+  actionable events.
 - Keep capture time because relative phrases such as `ngày mai`, `tối nay`,
   `tomorrow`, and `tonight` depend on it.
 

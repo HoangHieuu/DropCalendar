@@ -12,6 +12,12 @@ remain visibly incomplete. A user edit overrides the extracted proposal.
 
 Closing review preserves a draft unless the user explicitly discards it.
 
+When extraction returns multiple drafts, review shows `Event N of M` and lets
+the user move through the ordered drafts while no confirmation or Calendar
+operation is active. Edits, reminders, duplicate warnings, screenshot preview,
+and Calendar lifecycle belong to the selected draft. Every event requires its
+own confirmation dialog; there is no `Create All` action.
+
 ## Google Calendar Boundary
 
 Calendar writes use a provider adapter around Google Calendar `events.insert`.
@@ -29,6 +35,10 @@ The domain and review UI must not depend directly on Google SDK types.
 OAuth begins only as part of user-confirmed creation. Cancellation or provider
 failure preserves the draft and does not report success. Successful creation
 stores the returned provider event identity and calendar link when available.
+
+For multiple-event imports, one confirmation authorizes exactly one
+`events.insert` request for the selected draft. Navigating to another draft
+does not carry confirmation forward and cannot call the provider.
 
 The native app owns PKCE, state validation, the system-browser callback, access
 tokens, refresh tokens, and the confirmed Calendar write. Its bounded token
@@ -84,6 +94,10 @@ Current detection is local-only: exact screenshot fingerprint and normalized
 title/start matches are high-confidence warnings; same title/day/location is a
 soft warning. Warning override still enters the normal separate Calendar
 confirmation state, so it never creates an event directly.
+
+Sibling drafts use different deterministic per-position fingerprints. This
+prevents two legitimate events from the same screenshot from being classified
+as the same screenshot while preserving repeat-import detection per position.
 
 ## State Machine
 

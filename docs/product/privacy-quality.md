@@ -50,6 +50,15 @@ an explicit cloud/cost opt-in. Phase 2 real-world accuracy acceptance still
 requires a licensed non-synthetic corpus and complete Local Only and Accuracy
 reports over that corpus.
 
+Real-world acceptance uses manifest version 2 in an owner-controlled directory
+outside Git. Each item must be non-synthetic, hash-verified, sanitized,
+benchmark-authorized, independently reviewed, and, for Accuracy Mode,
+explicitly authorized for OpenRouter. Private benchmark permission may be used
+without public redistribution rights. Accuracy evaluation starts a dedicated
+loopback process, verifies a provider-side key limit no greater than $5,
+accounts actual request cost, and aborts if cost cannot be verified. Reports
+contain only redacted aggregate cost and quality metadata.
+
 ## MVP Targets
 
 | Metric | Target |
@@ -66,8 +75,10 @@ reports over that corpus.
 
 ## Regression Rules
 
-- Every benchmark image yields a valid draft or a clear failure reason.
+- Every benchmark image yields one or more valid drafts or a clear failure
+  reason.
 - No date may be invented without evidence.
+- Vague day-part words do not become invented clock times.
 - Every critical field carries evidence.
 - No event may be created without confirmation.
 - Prompt, OCR-engine, parser, or normalization changes run the benchmark.
@@ -75,8 +86,9 @@ reports over that corpus.
 
 ## Operational Metrics
 
-Track screenshot-to-preview success, preview-to-create conversion, manual
-corrections per event, import-to-created latency, duplicate-warning accuracy,
+Track screenshot-to-preview success, extracted-event count,
+preview-to-create conversion, manual corrections per event, import-to-created
+latency, duplicate-warning accuracy,
 correction rate by field, ambiguity detection, and critical-field error rate.
 Production logs must use counts/identifiers and redacted metadata rather than
 raw screenshot or OCR content.

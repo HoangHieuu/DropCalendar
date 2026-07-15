@@ -13,6 +13,12 @@ An extracted draft owns:
 - lifecycle state: draft, reviewed, creating, created, failed, or discarded.
 - an optional SHA-256 source fingerprint used only for local duplicate checks.
 
+When one screenshot yields multiple events, every event remains an independent
+draft with its own identity and lifecycle. Source order is held by the current
+review session. A deterministic event-position suffix is added to the source
+fingerprint so sibling events do not warn against each other while a later
+re-import of the same screenshot remains detectable.
+
 The JSON shape in `SPEC.md` section 7 is the seed contract. Implementation must
 turn it into typed domain/application models before choosing persistence or API
 serialization details.
@@ -84,3 +90,7 @@ record as created; per-draft deletion and Clear All are explicit actions. Raw
 screenshots are not part of the durable draft by default. Provider DTOs, local
 rows, and future API payloads must be parsed at their boundaries rather than
 shared as one mutable model.
+
+Multiple-event extraction does not add a database migration: each normalized
+event uses the existing independent draft row. Reopening one row from history
+does not reconstruct its original screenshot group in this slice.

@@ -21,6 +21,7 @@ implemented without fresh executable evidence.
 | SAFE-05 | No app-owned raw screenshot copy is retained by default after success; user originals are untouched | persistence integration and platform filesystem proof |
 | SAFE-06 | Logs exclude image bytes, full OCR, tokens, and private payloads | log capture/redaction tests |
 | SAFE-07 | Local-only mode makes no cloud call | adapter spy/network isolation proof |
+| SAFE-08 | Multiple extracted events require independent confirmations and provider calls | application state test with Calendar spy plus platform review flow |
 
 ## Functional Proof Areas
 
@@ -30,8 +31,8 @@ implemented without fresh executable evidence.
 | Vietnamese-English normalization | abbreviations, diacritics, mixed text | extraction payload | editable draft | locale/timezone | language-separated accuracy |
 | Date/time/timezone | relative dates, all-day, conflict, past warning | provider-to-domain parse | review warnings | system timezone | critical error rate |
 | Location | raw preservation, online/hybrid | Places candidates | user choice | permission/error state | location accuracy |
-| Review | enablement, edit override, state machine | draft persistence | confirm/cancel/retry | macOS/iOS/Android UI | correction rate |
-| Calendar | mapping, reminder limits | OAuth and Calendar fake/server | success/failure/retry | redirect/keychain | create success rate |
+| Review | enablement, edit override, multi-draft navigation, state machine | per-draft persistence | confirm/cancel/retry per event | macOS/iOS/Android UI | correction rate |
+| Calendar | mapping, reminder limits, independent confirmations | OAuth and Calendar fake/server | success/failure/retry per event | redirect/keychain | create success rate |
 | Duplicates | hash and composite signals | local history | warning override | local storage | warning precision |
 | Privacy | retention policy | deletion and redacted logs | history controls | filesystem/keychain | corpus sanitation |
 
@@ -47,7 +48,15 @@ deterministic rather than model-backed behavior.
   English, and 20 noisy/decorative examples.
 - Report Vietnamese and English title/date/time/location metrics separately.
 - Track critical wrong-date/wrong-time rate and median extraction latency.
-- Every item yields a valid draft or a structured failure reason.
+- Every item yields one or more valid drafts or a structured failure reason.
+- Real-world rows use manifest v2, stay outside Git, and pass benchmark-use,
+  provider authorization, hash, sanitation, and independent-review gates.
+- Accuracy preflight proves a dedicated provider key limit no greater than $5;
+  actual cumulative cost is recorded and unverifiable cost aborts.
+- Real-world acceptance is frozen by manifest hash; a completed 20-item
+  calibration projects 100+ item cost with a 20% reserve, and acceptance is
+  refused unless the reserved projection fits the remaining combined $5
+  authorization and provider-key limit.
 - Re-run after OCR engine, prompt, schema, parser, or normalization changes.
 
 ## Proof Status
@@ -70,24 +79,35 @@ shared-model integration path that still lands in review. Its UI smoke also
 proves pointer hover expands once and keeps a stable frame instead of feeding
 transient tracking exits back into panel resizing. US-006 adds strict
 corpus integrity/distribution checks, redacted language-separated scoring, a
-100-image generated regression corpus, and separate production-source Local
-Only and explicitly cloud-opted Accuracy runners. US-007 adds deterministic
+100-image generated regression corpus, manifest-v2 authorization and review
+gates, and separate production-source Local Only and explicitly cloud-opted
+Accuracy runners. Its benchmark-only service preflights a provider-limited key,
+enforces a $5 process ceiling, resolves actual request cost, and leaves the
+normal app endpoint cost-free. US-007 adds deterministic
 relative-date, weekday, deadline/event-date, door/start-time, OCR correction,
 and location-ranking rules with visible non-LLM disclosure. US-009 adds
 `MenuBarExtra` and bounded in-memory clipboard intake. US-010 adds minimized
 SQLite draft persistence, schema migration, reopen/delete behavior, and no
 image/full-OCR storage. US-011 adds provider-bounded reminders, local duplicate
 warnings, explicit-only MapKit candidates, default-off AES-GCM screenshot
-history, and scoped Clear All deletion.
+history, and scoped Clear All deletion. US-013 extends the supplied SPEC with
+bounded multiple-event extraction, schema-version-2 provider arrays, ordered
+one-at-a-time review, per-position duplicate identity, and executable proof
+that every Calendar write still needs a distinct confirmation.
 
-Fresh combined proof on 2026-07-14: the team-signed macOS suite passes all 89
-tests, including an isolated Data Protection Keychain round trip; the
-FastAPI suite passes 16 tests; the benchmark package passes 9 tests; and the
-production Local Only runner scores all 100 generated fixtures with zero
-critical wrong values and about 137 ms median latency. The latest team-signed
-macOS UI smoke passes clipboard-to-review persistence and stable notch hover;
-its menu-bar case is currently red because the status item is reported as not
-hittable. No UI smoke creates a Calendar event.
+Fresh combined proof on 2026-07-15: the macOS suite passes 100 tests, including
+benchmark-budget response handling, with one environment-dependent Data
+Protection Keychain case skipped. An earlier team-signed run passed the
+isolated Data Protection Keychain round trip; the FastAPI suite passes
+27 tests; the benchmark package passes 45 tests; and the production Local Only
+runner scores all 100 generated fixtures with zero critical wrong values. The
+latest team-signed
+macOS UI smoke passes clipboard-to-review persistence and stable notch hover.
+Its prior menu-bar case reported that the status item existed but was not
+hittable; the notch panel has since moved below `.statusBar` level and the
+status item now has an explicit SnapCal accessibility label. A fresh UI click
+result is still open because Xcode currently times out enabling automation mode
+before any test method starts. No UI smoke creates a Calendar event.
 Native inspection shows the deterministic Local Only disclosure and
 default-off encrypted screenshot setting. The generated corpus remains
 synthetic-only; licensed real-world Local Only/Accuracy reports, direct notch

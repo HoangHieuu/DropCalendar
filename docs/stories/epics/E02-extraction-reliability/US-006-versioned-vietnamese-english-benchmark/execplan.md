@@ -41,12 +41,21 @@ Hard gates:
 1. Implement schemas, validation, scoring, and deterministic tests.
 2. Add a small redistributable seed corpus and prove end-to-end reporting.
 3. Add extraction adapters for Local Only and explicitly opted-in Accuracy Mode.
-4. Expand to 100 licensed and sanitized items with required distribution.
-5. Run both modes, publish redacted results, and classify failure clusters.
-6. Update Phase 2 product, story, decision, and Harness proof state.
+4. Add manifest version 2 with benchmark/cloud authorization, external-private
+   storage enforcement, expected ambiguities, and independent review gates.
+5. Add the disabled-by-default benchmark endpoint, dedicated-key preflight,
+   actual cost accounting, $5 ceiling, and redacted run metadata.
+6. Expand to a reviewed 20-item calibration set and frozen 100-item licensed,
+   sanitized, authorized acceptance set with the required distribution.
+7. Run Local Only first, project cloud cost from calibration, then run the
+   authorized Accuracy acceptance only if budget remains.
+8. Publish redacted results, classify failure clusters, and update Phase 2
+   product, story, decision, and Harness proof state.
 
 ## Stop Conditions
 
-Pause for human confirmation if a fixture lacks clear redistribution rights,
-contains private information that cannot be sanitized, Accuracy Mode would run
-without explicit opt-in, or a benchmark gate would need to be weakened.
+Pause for human confirmation if a fixture lacks clear public or private
+benchmark permission, contains private information that cannot be sanitized,
+has not completed critical-field second review, lacks explicit OpenRouter
+authorization, Accuracy Mode would run without explicit opt-in, provider key
+limits exceed $5, or a benchmark gate would need to be weakened.

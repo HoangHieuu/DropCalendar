@@ -44,6 +44,13 @@ includes context-aware reminder choices, local duplicate warnings, explicit
 Apple Maps candidate lookup, recent-draft reopening/deletion, and Clear All
 local-history controls.
 
+One screenshot may yield multiple independently dated events. Review shows
+`Event N of M`, preserves each draft separately, and requires a new confirmation
+for every Google Calendar event; SnapCal has no batch `Create All` path. The
+Accuracy service returns a bounded schema-version-2 `events` array, while the
+app remains compatible with the earlier single-event response during local
+upgrades.
+
 The root `SPEC.md` is the supplied source snapshot. The smaller files under
 `docs/product/`, the active story packets, executable proof, and accepted
 decisions are the living contract for ongoing work.
@@ -127,6 +134,8 @@ exact command sequence.
 ## Product Rules That Must Not Drift
 
 - Never create a calendar event without explicit user confirmation.
+- Multiple extracted events require separate review and confirmation; one
+  confirmation never authorizes a batch write.
 - Treat date, start time, timezone, and travel-critical location as critical
   fields; uncertainty is safer than a silent guess.
 - Preserve source evidence and confidence for every critical extracted field.

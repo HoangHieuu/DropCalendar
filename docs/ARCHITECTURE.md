@@ -22,6 +22,20 @@ There is no production service deployment or server database. The checked-in
 100-image corpus is generated regression data, not a licensed real-world
 accuracy corpus.
 
+Extraction returns one to ten ordered drafts. The shared model reviews one
+selected draft at a time, stores sibling Calendar lifecycle independently, and
+requires a separate confirmation and provider call for every event.
+
+Real-world benchmark acceptance uses an external manifest-v2 corpus. Private
+non-redistributable images are forbidden from repository-owned directories;
+each row carries benchmark/cloud authorization, expected ambiguity labels, and
+independent critical-field review. The normal `/v1/extract` response is schema
+version 2 with an `events` array; the macOS client retains version-1 response
+compatibility. A benchmark-only endpoint is registered only in explicit
+benchmark mode, preflights a dedicated OpenRouter key limit no greater than $5,
+resolves actual request cost, and maintains serialized process-local
+accounting.
+
 The macOS surface owns one shared `SnapCalModel`. A non-activating AppKit
 `NSPanel` hosts the SwiftUI notch drop target and forwards selected file URLs
 into that model; `MenuBarExtra`, clipboard intake, recent drafts, settings, and
@@ -36,11 +50,11 @@ SwiftUI manual image import and review
   -> Apple Vision local OCR
   -> Local Only deterministic extraction
      or opt-in loopback FastAPI -> OpenRouter -> Gemini 3.1 Flash Lite
-  -> typed event-draft result
-  -> editable review plus minimized local draft persistence
+  -> typed one-or-more event-draft result
+  -> one-at-a-time editable review plus minimized local draft persistence
   -> reminder suggestions, local duplicate warnings, and optional explicit
      MapKit place candidates
-  -> explicit confirmation state machine
+  -> per-event explicit confirmation state machine
   -> Google desktop OAuth (system browser + loopback callback + PKCE)
   -> loopback FastAPI token broker -> Google OAuth token endpoint
   -> Google Calendar REST events.insert
@@ -77,7 +91,7 @@ surfaces
         |
         v
 application
-  import image | extract event | review draft | create event | manage history
+  import image | extract event(s) | review selected draft | create one event | manage history
         |
         v
 domain
@@ -126,11 +140,11 @@ untrusted image
   -> Local Only returns the local candidate, or
   -> Accuracy Mode sends image + OCR to 127.0.0.1 proxy
   -> proxy calls OpenRouter Chat Completions with a strict JSON Schema
-  -> strict versioned proposal validation and local/cloud disagreement checks
+  -> strict versioned one-to-ten proposal validation and local/cloud disagreement checks
   -> normalization and deterministic consistency checks
   -> confidence and ambiguity rules
-  -> typed draft
-  -> mandatory review
+  -> ordered typed drafts
+  -> mandatory one-at-a-time review and per-event confirmation
 ```
 
 Cloud OCR remains future infrastructure. The OpenRouter adapter enters through
@@ -193,6 +207,8 @@ retention records and operational logs remain separate concerns.
 3. Integration tests for local persistence and calendar failure/retry behavior.
 4. Xcode/Simulator or macOS platform tests for import, review, and UI state.
 5. Curated benchmark evaluation for extraction accuracy and latency.
+   Accuracy evaluation uses a dedicated free-port loopback process, provider
+   key-limit preflight, and redacted cost/run metadata.
 6. End-to-end proof that no calendar write occurs before user confirmation.
 
 ## Remaining Decisions

@@ -2,7 +2,7 @@
 
 ## Status
 
-implemented and automated platform smoke passed
+implemented; platform smoke revalidation pending
 
 ## Lane
 
@@ -76,3 +76,11 @@ No Harness behavior change is expected.
   Local Only code, reached Review, relaunched, and reopened the persisted
   draft. No Calendar action was invoked.
 - Reproduce with `scripts/run-ui-smoke.sh`.
+- On 2026-07-15, a later three-case smoke found the status item present but not
+  hittable while the notch panel was ordered at the same `.statusBar` window
+  level. The panel now uses `.mainMenu` so app and system status items remain
+  above it, and the custom menu-bar label exposes `SnapCal` instead of the SF
+  Symbol description. The macOS unit suite passes the level invariant; direct
+  app inspection sees the labeled item. Final automated click revalidation is
+  pending because the local Xcode runner currently times out enabling UI
+  automation before executing any test method.
