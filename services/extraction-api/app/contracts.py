@@ -141,12 +141,50 @@ class EventProposal(BaseModel):
         return self
 
 
+class EventProposalSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    events: list[EventProposal] = Field(min_length=1, max_length=10)
+
+
 class ExtractionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["2"] = "2"
     model: ContractString
-    event: EventProposal
+    events: list[EventProposal] = Field(min_length=1, max_length=10)
+
+
+class BenchmarkUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_cost_usd: float = Field(ge=0, le=5)
+    cumulative_cost_usd: float = Field(ge=0, le=5)
+    budget_remaining_usd: float = Field(ge=0, le=5)
+    request_count: int = Field(ge=0)
+
+
+class BenchmarkExtractionResponse(ExtractionResponse):
+    usage: BenchmarkUsage
+
+
+class BenchmarkPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok"] = "ok"
+    model: ContractString
+    budget_ceiling_usd: float = Field(gt=0, le=5)
+    provider_key_limit_usd: float = Field(gt=0, le=5)
+    provider_key_limit_remaining_usd: float = Field(gt=0, le=5)
+    provider_key_limit_reset: str | None = None
+
+
+class BenchmarkStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok"] = "ok"
+    model: ContractString
+    usage: BenchmarkUsage
 
 
 class HealthResponse(BaseModel):

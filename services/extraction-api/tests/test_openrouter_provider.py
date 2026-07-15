@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import asyncio
 import json
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -13,6 +14,7 @@ from app.provider import (
     OpenRouterProvider,
     ProviderRejectedError,
     ProviderUnavailableError,
+    ProviderUsageUnavailableError,
 )
 
 
@@ -77,7 +79,7 @@ def proposal_json() -> str:
             "ambiguities": [],
         }
     )
-    return proposal.model_dump_json()
+    return json.dumps({"events": [proposal.model_dump(mode="json")]})
 
 
 def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_schema() -> None:
@@ -113,8 +115,12 @@ def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_sch
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
+    event_array = body["response_format"]["json_schema"]["schema"]["properties"]["events"]
+    assert event_array["minItems"] == 1
+    assert event_array["maxItems"] == 10
     assert body["provider"]["require_parameters"] is True
-    assert result.title.value == "Agentic AI Build Week"
+    assert len(result) == 1
+    assert result[0].title.value == "Agentic AI Build Week"
 
 
 @pytest.mark.parametrize(
@@ -153,6 +159,22 @@ def test_openrouter_rejects_malformed_success_envelope() -> None:
         asyncio.run(provider.extract(extraction_request()))
 
 
+def test_openrouter_rejects_empty_multiple_event_proposal() -> None:
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": '{"events":[]}'}}]},
+            )
+        ),
+    )
+
+    with pytest.raises(InvalidProviderOutputError):
+        asyncio.run(provider.extract(extraction_request()))
+
+
 def test_openrouter_requires_https_endpoint() -> None:
     with pytest.raises(ProviderUnavailableError):
         OpenRouterProvider(
@@ -160,3 +182,101 @@ def test_openrouter_requires_https_endpoint() -> None:
             model="google/gemini-3.1-flash-lite",
             base_url="http://openrouter.example/api/v1",
         )
+
+
+def test_openrouter_returns_non_streaming_usage_cost() -> None:
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "id": "gen-direct-cost",
+                    "choices": [{"message": {"content": proposal_json()}}],
+                    "usage": {"cost": 0.0125},
+                },
+            )
+        ),
+    )
+
+    result = asyncio.run(provider.extract_with_usage(extraction_request()))
+
+    assert result.generation_id == "gen-direct-cost"
+    assert result.request_cost_usd == Decimal("0.0125")
+
+
+def test_openrouter_falls_back_to_generation_metadata_for_cost() -> None:
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": "gen-fallback-cost",
+                    "choices": [{"message": {"content": proposal_json()}}],
+                    "usage": {"prompt_tokens": 100},
+                },
+            )
+        assert request.url.params["id"] == "gen-fallback-cost"
+        return httpx.Response(200, json={"data": {"total_cost": 0.021}})
+
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = asyncio.run(provider.extract_with_usage(extraction_request()))
+
+    assert result.request_cost_usd == Decimal("0.021")
+    assert paths == ["/api/v1/chat/completions", "/api/v1/generation"]
+
+
+def test_openrouter_fails_closed_when_cost_is_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(
+                200,
+                json={
+                    "id": "gen-no-cost",
+                    "choices": [{"message": {"content": proposal_json()}}],
+                },
+            )
+        return httpx.Response(200, json={"data": {"total_cost": None}})
+
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderUsageUnavailableError):
+        asyncio.run(provider.extract_with_usage(extraction_request()))
+
+
+def test_openrouter_reads_current_key_spending_limit() -> None:
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "limit": 5,
+                        "limit_remaining": 4.75,
+                        "limit_reset": "monthly",
+                    }
+                },
+            )
+        ),
+    )
+
+    status = asyncio.run(provider.key_status())
+
+    assert status.limit_usd == Decimal("5")
+    assert status.limit_remaining_usd == Decimal("4.75")
+    assert status.limit_reset == "monthly"

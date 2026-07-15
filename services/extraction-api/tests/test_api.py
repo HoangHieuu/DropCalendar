@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from decimal import Decimal
+
+import pytest
 
 from fastapi.testclient import TestClient
 
 from app.contracts import EventProposal, ExtractionRequest
+from app.benchmark import BenchmarkBudget, BenchmarkConfigurationError
 from app.main import create_app
 from app.oauth_broker import OAuthBrokerUnavailableError, OAuthClientMismatchError
-from app.provider import InvalidProviderOutputError, ProviderUnavailableError
+from app.provider import (
+    InvalidProviderOutputError,
+    ProviderExtractionResult,
+    ProviderKeyStatus,
+    ProviderUnavailableError,
+)
 
 
 JPEG = b"\xff\xd8\xff\xe0snapcal-test"
@@ -81,9 +90,40 @@ class FakeProvider:
     ready: bool = True
     received: ExtractionRequest | None = None
 
-    async def extract(self, request: ExtractionRequest) -> EventProposal:
+    async def extract(self, request: ExtractionRequest) -> list[EventProposal]:
         self.received = request
-        return self.proposal
+        return [self.proposal]
+
+
+@dataclass
+class FakeBenchmarkProvider:
+    proposal: EventProposal
+    costs: list[Decimal]
+    key: ProviderKeyStatus = field(default_factory=lambda: ProviderKeyStatus(
+        limit_usd=Decimal("5"),
+        limit_remaining_usd=Decimal("5"),
+        limit_reset=None,
+    ))
+    model: str = "google/gemini-3.1-flash-lite"
+    ready: bool = True
+    benchmark_calls: int = 0
+
+    async def extract(self, request: ExtractionRequest) -> list[EventProposal]:
+        return [self.proposal]
+
+    async def extract_with_usage(
+        self, request: ExtractionRequest
+    ) -> ProviderExtractionResult:
+        cost = self.costs[self.benchmark_calls]
+        self.benchmark_calls += 1
+        return ProviderExtractionResult(
+            events=[self.proposal],
+            request_cost_usd=cost,
+            generation_id=f"gen-{self.benchmark_calls}",
+        )
+
+    async def key_status(self) -> ProviderKeyStatus:
+        return self.key
 
 
 @dataclass
@@ -92,8 +132,18 @@ class FailingProvider:
     model: str = "google/gemini-3.1-flash-lite"
     ready: bool = True
 
-    async def extract(self, request: ExtractionRequest) -> EventProposal:
+    async def extract(self, request: ExtractionRequest) -> list[EventProposal]:
         raise self.error
+
+
+@dataclass
+class FakeMultiProvider:
+    proposals: list[EventProposal]
+    model: str = "google/gemini-3.1-flash-lite"
+    ready: bool = True
+
+    async def extract(self, request: ExtractionRequest) -> list[EventProposal]:
+        return self.proposals
 
 
 @dataclass
@@ -129,12 +179,116 @@ def test_extract_returns_strict_all_day_range_and_passes_bounded_input() -> None
 
     assert response.status_code == 200
     body = response.json()
-    assert body["event"]["title"]["value"] == "Agentic AI Build Week"
-    assert body["event"]["start"]["date"] == "2026-07-08"
-    assert body["event"]["end"]["date"] == "2026-07-12"
-    assert body["event"]["is_all_day"] is True
+    assert body["schema_version"] == "2"
+    assert len(body["events"]) == 1
+    assert body["events"][0]["title"]["value"] == "Agentic AI Build Week"
+    assert body["events"][0]["start"]["date"] == "2026-07-08"
+    assert body["events"][0]["end"]["date"] == "2026-07-12"
+    assert body["events"][0]["is_all_day"] is True
+    assert "usage" not in body
     assert provider.received is not None
     assert provider.received.decoded_image() == JPEG
+
+
+def test_extract_returns_multiple_events_in_provider_order() -> None:
+    first = valid_proposal()
+    second_data = first.model_dump(mode="json")
+    second_data["title"]["value"] = "Agentic AI Demo Day"
+    second_data["start"]["date"] = "2026-07-13"
+    second_data["start"]["evidence_text"] = "July 13, 2026"
+    second_data["end"]["date"] = "2026-07-13"
+    second_data["end"]["evidence_text"] = "July 13, 2026"
+    second = EventProposal.model_validate(second_data)
+
+    response = TestClient(create_app(FakeMultiProvider([first, second]))).post(
+        "/v1/extract",
+        json=valid_payload(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["schema_version"] == "2"
+    assert [event["title"]["value"] for event in response.json()["events"]] == [
+        "Agentic AI Build Week",
+        "Agentic AI Demo Day",
+    ]
+
+
+def test_benchmark_endpoint_is_disabled_by_default() -> None:
+    response = TestClient(create_app(FakeProvider(valid_proposal()))).post(
+        "/v1/benchmark/extract",
+        json=valid_payload(),
+    )
+
+    assert response.status_code == 404
+
+
+def test_benchmark_preflight_and_extract_report_cumulative_cost() -> None:
+    provider = FakeBenchmarkProvider(
+        valid_proposal(),
+        costs=[Decimal("0.01"), Decimal("0.02")],
+    )
+    client = TestClient(
+        create_app(provider, benchmark_budget=BenchmarkBudget("0.05"))
+    )
+
+    preflight = client.get("/v1/benchmark/preflight")
+    first = client.post("/v1/benchmark/extract", json=valid_payload())
+    second = client.post("/v1/benchmark/extract", json=valid_payload())
+
+    assert preflight.status_code == 200
+    assert preflight.json()["budget_ceiling_usd"] == 0.05
+    assert preflight.json()["provider_key_limit_usd"] == 5.0
+    assert first.status_code == 200
+    assert first.json()["usage"] == {
+        "request_cost_usd": 0.01,
+        "cumulative_cost_usd": 0.01,
+        "budget_remaining_usd": 0.04,
+        "request_count": 1,
+    }
+    assert second.json()["usage"]["cumulative_cost_usd"] == 0.03
+    assert second.json()["usage"]["budget_remaining_usd"] == 0.02
+
+
+def test_benchmark_refuses_requests_after_budget_is_exhausted() -> None:
+    provider = FakeBenchmarkProvider(
+        valid_proposal(),
+        costs=[Decimal("0.01"), Decimal("0.01")],
+    )
+    client = TestClient(
+        create_app(provider, benchmark_budget=BenchmarkBudget("0.01"))
+    )
+
+    assert client.post("/v1/benchmark/extract", json=valid_payload()).status_code == 200
+    exhausted = client.post("/v1/benchmark/extract", json=valid_payload())
+
+    assert exhausted.status_code == 402
+    assert exhausted.json()["detail"]["code"] == "benchmark_budget_exhausted"
+    assert provider.benchmark_calls == 1
+
+
+def test_benchmark_preflight_rejects_key_limit_above_five_dollars() -> None:
+    provider = FakeBenchmarkProvider(
+        valid_proposal(),
+        costs=[Decimal("0.01")],
+        key=ProviderKeyStatus(
+            limit_usd=Decimal("10"),
+            limit_remaining_usd=Decimal("10"),
+            limit_reset=None,
+        ),
+    )
+    client = TestClient(
+        create_app(provider, benchmark_budget=BenchmarkBudget("5"))
+    )
+
+    response = client.get("/v1/benchmark/preflight")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "benchmark_preflight_failed"
+
+
+def test_benchmark_configuration_rejects_budget_above_authorized_ceiling() -> None:
+    with pytest.raises(BenchmarkConfigurationError, match="cannot exceed"):
+        BenchmarkBudget("5.01")
 
 
 def test_rejects_invalid_base64_and_mismatched_mime_type() -> None:
