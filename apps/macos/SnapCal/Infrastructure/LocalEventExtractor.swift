@@ -6,6 +6,26 @@ protocol EventExtracting {
         capturedAt: Date,
         sourceFileName: String
     ) throws -> EventDraft
+
+    func extractEvents(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) throws -> [EventDraft]
+}
+
+extension EventExtracting {
+    func extractEvents(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) throws -> [EventDraft] {
+        [try extract(
+            lines: lines,
+            capturedAt: capturedAt,
+            sourceFileName: sourceFileName
+        )]
+    }
 }
 
 enum DraftExtractionError: LocalizedError, Equatable {
@@ -17,6 +37,11 @@ enum DraftExtractionError: LocalizedError, Equatable {
 }
 
 struct LocalEventExtractor: EventExtracting {
+    private struct NumberedEventBlock {
+        let ordinal: Int
+        let lines: [RecognizedTextLine]
+    }
+
     private struct DateEvidence {
         let day: Int
         let month: Int
@@ -54,6 +79,37 @@ struct LocalEventExtractor: EventExtracting {
 
     init(calendar: Calendar = .current) {
         self.calendar = calendar
+    }
+
+    func extractEvents(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) throws -> [EventDraft] {
+        let blocks = numberedEventBlocks(in: lines)
+        guard blocks.count >= 2 else {
+            return [try extract(
+                lines: lines,
+                capturedAt: capturedAt,
+                sourceFileName: sourceFileName
+            )]
+        }
+
+        return try blocks.prefix(10).map { block in
+            var draft = try extract(
+                lines: block.lines,
+                capturedAt: capturedAt,
+                sourceFileName: sourceFileName
+            )
+            if let title = conciseNumberedTitle(in: block.lines, ordinal: block.ordinal) {
+                draft.title = ExtractedField(
+                    value: title.text,
+                    evidenceText: title.evidence,
+                    confidence: title.confidence
+                )
+            }
+            return draft
+        }
     }
 
     func extract(
@@ -230,6 +286,102 @@ struct LocalEventExtractor: EventExtracting {
             ),
             isAllDay: isAllDay,
             ambiguities: ambiguities
+        )
+    }
+
+    private func numberedEventBlocks(in lines: [RecognizedTextLine]) -> [NumberedEventBlock] {
+        let cleaned = lines
+            .map {
+                RecognizedTextLine(
+                    text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    confidence: $0.confidence,
+                    region: $0.region
+                )
+            }
+            .filter { !$0.text.isEmpty }
+
+        var blocks: [NumberedEventBlock] = []
+        var currentOrdinal: Int?
+        var currentLines: [RecognizedTextLine] = []
+
+        func finishCurrentBlock() {
+            guard let ordinal = currentOrdinal, !currentLines.isEmpty else { return }
+            blocks.append(NumberedEventBlock(ordinal: ordinal, lines: currentLines))
+        }
+
+        for line in cleaned {
+            if let numbered = numberedLine(line) {
+                finishCurrentBlock()
+                currentOrdinal = numbered.ordinal
+                currentLines = [numbered.line]
+            } else if currentOrdinal != nil {
+                currentLines.append(line)
+            }
+        }
+        finishCurrentBlock()
+
+        let independentlyDated = blocks.filter { block in
+            block.lines.contains { parseDate($0) != nil || parseDateRange($0) != nil }
+        }
+        guard independentlyDated.count >= 2,
+              independentlyDated.count == blocks.count else {
+            return []
+        }
+        return independentlyDated
+    }
+
+    private func numberedLine(
+        _ line: RecognizedTextLine
+    ) -> (ordinal: Int, line: RecognizedTextLine)? {
+        guard let groups = captures(#"^\s*(\d{1,2})\s*[\)\.\:\-]\s*(.+)$"#, in: line.text),
+              let ordinal = integer(groups[safe: 1]),
+              let text = groups[safe: 2] ?? nil,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return (
+            ordinal,
+            RecognizedTextLine(
+                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                confidence: line.confidence,
+                region: line.region
+            )
+        )
+    }
+
+    private func conciseNumberedTitle(
+        in lines: [RecognizedTextLine],
+        ordinal: Int
+    ) -> (text: String, evidence: String, confidence: Double)? {
+        let patterns = [
+            #"\b(?:buổi\s+)?training(?:\s+cho)?\s+bài\s+\d+\b"#,
+            #"\btraining\s+(?:session|lesson|part|module)\s+\d+\b"#,
+            #"\b(?:session|lesson|part|module)\s+\d+\b"#,
+        ]
+        for line in lines {
+            for pattern in patterns {
+                guard let regex = try? NSRegularExpression(
+                    pattern: pattern,
+                    options: [.caseInsensitive]
+                ) else { continue }
+                let range = NSRange(line.text.startIndex..<line.text.endIndex, in: line.text)
+                guard let match = regex.firstMatch(in: line.text, range: range),
+                      let swiftRange = Range(match.range, in: line.text) else {
+                    continue
+                }
+                return (
+                    String(line.text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines),
+                    line.text,
+                    line.confidence
+                )
+            }
+        }
+
+        guard let first = lines.first else { return nil }
+        return (
+            "Event \(ordinal): \(first.text)",
+            first.text,
+            min(first.confidence, 0.7)
         )
     }
 

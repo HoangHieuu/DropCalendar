@@ -42,6 +42,8 @@ struct ImportIssue: Equatable {
 final class SnapCalModel {
     var phase: AppPhase = .ready
     var draft: EventDraft = .empty
+    private(set) var reviewDrafts: [EventDraft] = []
+    private(set) var reviewDraftIndex = 0
     var calendarState: CalendarCreationState = .idle
     var isGoogleConnected = false
     var extractionMode: ExtractionMode = .localOnly
@@ -69,6 +71,7 @@ final class SnapCalModel {
     private let privacyPreferences: any PrivacyPreferenceStoring
     private let now: () -> Date
     private var pendingDraftSave: Task<Void, Never>?
+    private var reviewCalendarStates: [UUID: CalendarCreationState] = [:]
 
     init(
         validator: any ImageValidating,
@@ -200,6 +203,25 @@ final class SnapCalModel {
         }
     }
 
+    var reviewDraftCount: Int { reviewDrafts.count }
+
+    var canSelectPreviousReviewDraft: Bool {
+        reviewDraftIndex > 0 && canNavigateReviewDrafts
+    }
+
+    var canSelectNextReviewDraft: Bool {
+        reviewDraftIndex + 1 < reviewDrafts.count && canNavigateReviewDrafts
+    }
+
+    private var canNavigateReviewDrafts: Bool {
+        switch calendarState {
+        case .idle, .created, .failed:
+            return true
+        case .awaitingConfirmation, .authorizing, .creating:
+            return false
+        }
+    }
+
     func importScreenshot(from url: URL) async {
         phase = .processing(fileName: url.lastPathComponent)
 
@@ -216,9 +238,20 @@ final class SnapCalModel {
     func importClipboardImage() async {
         do {
             let clipboardImage = try clipboardReader.readImage()
-            phase = .processing(fileName: clipboardImage.fileName)
-            let image = try validator.validate(clipboardImage)
-            try await process(image)
+            await importInMemoryImage(clipboardImage)
+        } catch is CancellationError {
+            startOver()
+        } catch {
+            phase = .failed(ImportIssue(error: error))
+        }
+    }
+
+    func importInMemoryImage(_ image: ClipboardImage) async {
+        phase = .processing(fileName: image.fileName)
+
+        do {
+            let validatedImage = try validator.validate(image)
+            try await process(validatedImage)
         } catch is CancellationError {
             startOver()
         } catch {
@@ -233,6 +266,9 @@ final class SnapCalModel {
     func startOver() {
         pendingDraftSave?.cancel()
         draft = .empty
+        reviewDrafts = []
+        reviewDraftIndex = 0
+        reviewCalendarStates = [:]
         calendarState = .idle
         extractionNotice = .local
         duplicateWarnings = []
@@ -260,12 +296,15 @@ final class SnapCalModel {
             }
             let restored = try stored.restore()
             draft = restored.0
+            reviewDrafts = [draft]
+            reviewDraftIndex = 0
             extractionNotice = restored.1
             if stored.lifecycle == .created, let receipt = restored.2 {
                 calendarState = .created(receipt)
             } else {
                 calendarState = .idle
             }
+            reviewCalendarStates = [draft.id: calendarState]
             draftHistoryIssue = nil
             locationCandidates = []
             locationResolutionIssue = nil
@@ -369,19 +408,55 @@ final class SnapCalModel {
         draftDidChange()
     }
 
+    func selectPreviousReviewDraft() async {
+        await selectReviewDraft(at: reviewDraftIndex - 1)
+    }
+
+    func selectNextReviewDraft() async {
+        await selectReviewDraft(at: reviewDraftIndex + 1)
+    }
+
+    func selectReviewDraft(at index: Int) async {
+        guard reviewDrafts.indices.contains(index),
+              index != reviewDraftIndex,
+              canNavigateReviewDrafts else {
+            return
+        }
+
+        pendingDraftSave?.cancel()
+        synchronizeCurrentDraft()
+        await persistCurrentDraft(
+            lifecycle: lifecycle(for: calendarState),
+            receipt: receipt(for: calendarState)
+        )
+
+        reviewDraftIndex = index
+        draft = reviewDrafts[index]
+        calendarState = reviewCalendarStates[draft.id] ?? .idle
+        duplicateWarnings = []
+        locationCandidates = []
+        locationResolutionIssue = nil
+        reminderIssue = nil
+        await refreshDuplicateWarnings()
+        await loadScreenshotPreview(draftID: draft.id)
+    }
+
     func requestCalendarCreation() {
         do {
             _ = try CalendarEventMapper.request(from: draft)
             pendingDraftSave?.cancel()
             calendarState = .awaitingConfirmation
+            reviewCalendarStates[draft.id] = calendarState
         } catch {
             calendarState = .failed(CalendarCreationIssue(error: error))
+            reviewCalendarStates[draft.id] = calendarState
         }
     }
 
     func cancelCalendarCreation() {
         guard case .awaitingConfirmation = calendarState else { return }
         calendarState = .idle
+        reviewCalendarStates[draft.id] = calendarState
     }
 
     func confirmCalendarCreation() async {
@@ -392,18 +467,22 @@ final class SnapCalModel {
             request = try CalendarEventMapper.request(from: draft)
         } catch {
             calendarState = .failed(CalendarCreationIssue(error: error))
+            reviewCalendarStates[draft.id] = calendarState
             return
         }
 
         calendarState = isGoogleConnected ? .creating : .authorizing
+        reviewCalendarStates[draft.id] = calendarState
         do {
             let receipt = try await calendarScheduler.createEvent(from: request)
             isGoogleConnected = await calendarScheduler.hasStoredAuthorization()
             calendarState = .created(receipt)
+            reviewCalendarStates[draft.id] = calendarState
             await persistCurrentDraft(lifecycle: .created, receipt: receipt)
         } catch {
             isGoogleConnected = await calendarScheduler.hasStoredAuthorization()
             calendarState = .failed(CalendarCreationIssue(error: error))
+            reviewCalendarStates[draft.id] = calendarState
         }
     }
 
@@ -411,7 +490,10 @@ final class SnapCalModel {
         do {
             try await calendarScheduler.disconnect()
             isGoogleConnected = false
-            if case .created = calendarState { calendarState = .idle }
+            if case .created = calendarState {
+                calendarState = .idle
+                reviewCalendarStates[draft.id] = calendarState
+            }
         } catch {
             calendarState = .failed(CalendarCreationIssue(error: error))
         }
@@ -420,6 +502,8 @@ final class SnapCalModel {
     func draftDidChange() {
         guard !isCalendarOperationInProgress else { return }
         calendarState = .idle
+        reviewCalendarStates[draft.id] = calendarState
+        synchronizeCurrentDraft()
         pendingDraftSave?.cancel()
         pendingDraftSave = Task { [weak self] in
             do {
@@ -436,16 +520,17 @@ final class SnapCalModel {
 
     private func process(_ image: ValidatedImage) async throws {
         let lines = try await ocrService.recognizeText(in: image.cgImage)
+        let extractedDrafts: [EventDraft]
         switch extractionMode {
         case .localOnly:
-            draft = try extractor.extract(
+            extractedDrafts = try extractor.extractEvents(
                 lines: lines,
                 capturedAt: image.capturedAt,
                 sourceFileName: image.fileName
             )
             extractionNotice = .local
         case .accuracy:
-            let localCandidate = try? extractor.extract(
+            let localCandidates = try? extractor.extractEvents(
                 lines: lines,
                 capturedAt: image.capturedAt,
                 sourceFileName: image.fileName
@@ -457,34 +542,62 @@ final class SnapCalModel {
                     capturedAt: image.capturedAt,
                     sourceFileName: image.fileName
                 )
-                draft = reconcile(cloud: result.draft, local: localCandidate)
+                extractedDrafts = reconcile(
+                    cloud: result.drafts,
+                    local: localCandidates ?? []
+                )
                 extractionNotice = .openRouter(model: result.model)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                guard var localCandidate else { throw error }
-                localCandidate.ambiguities.append(DraftAmbiguity(
-                    field: .extraction,
-                    message: "Accuracy Mode was unavailable. This draft uses on-device extraction only.",
-                    severity: .medium
-                ))
-                draft = localCandidate
+                guard var localCandidates else { throw error }
+                for index in localCandidates.indices {
+                    localCandidates[index].ambiguities.append(DraftAmbiguity(
+                        field: .extraction,
+                        message: "Accuracy Mode was unavailable. This draft uses on-device extraction only.",
+                        severity: .medium
+                    ))
+                }
+                extractedDrafts = localCandidates
                 extractionNotice = .localFallback(
                     reason: (error as? LocalizedError)?.errorDescription
                         ?? "Accuracy Mode was unavailable."
                 )
             }
         }
-        draft.sourceFingerprint = image.sourceFingerprint
-        LocationNormalizer.normalize(&draft)
-        if draft.reminders.isEmpty {
-            draft.reminders = ReminderPolicy.suggestions(for: draft, now: now())
+
+        guard !extractedDrafts.isEmpty else {
+            throw DraftExtractionError.noEventDetected
         }
+        var preparedDrafts = Array(extractedDrafts.prefix(10))
+        for index in preparedDrafts.indices {
+            if preparedDrafts.count == 1 {
+                preparedDrafts[index].sourceFingerprint = image.sourceFingerprint
+            } else {
+                preparedDrafts[index].sourceFingerprint = image.sourceFingerprint.map {
+                    "\($0):event:\(index)"
+                }
+            }
+            LocationNormalizer.normalize(&preparedDrafts[index])
+            if preparedDrafts[index].reminders.isEmpty {
+                preparedDrafts[index].reminders = ReminderPolicy.suggestions(
+                    for: preparedDrafts[index],
+                    now: now()
+                )
+            }
+        }
+
+        reviewDrafts = preparedDrafts
+        reviewDraftIndex = 0
+        draft = preparedDrafts[0]
+        reviewCalendarStates = Dictionary(
+            uniqueKeysWithValues: preparedDrafts.map { ($0.id, CalendarCreationState.idle) }
+        )
         calendarState = .idle
         phase = .review
-        await persistCurrentDraft()
+        await persistExtractedDrafts()
         if draftHistoryIssue == nil {
-            await retainScreenshotIfEnabled(image)
+            await retainScreenshotIfEnabled(image, draftIDs: preparedDrafts.map(\.id))
         } else {
             screenshotPreviewData = nil
         }
@@ -495,6 +608,7 @@ final class SnapCalModel {
         receipt: CalendarCreationReceipt? = nil
     ) async {
         guard phase == .review else { return }
+        synchronizeCurrentDraft()
         let stored = PersistedDraft(
             draft: draft,
             extractionNotice: extractionNotice,
@@ -509,6 +623,55 @@ final class SnapCalModel {
         } catch {
             draftHistoryIssue = historyMessage(for: error)
         }
+    }
+
+    private func persistExtractedDrafts() async {
+        guard phase == .review else { return }
+        var savedDraftIDs: [UUID] = []
+        do {
+            for candidate in reviewDrafts {
+                try await draftStore.save(PersistedDraft(
+                    draft: candidate,
+                    extractionNotice: extractionNotice,
+                    lifecycle: .draft,
+                    receipt: nil
+                ))
+                savedDraftIDs.append(candidate.id)
+            }
+            draftHistoryIssue = nil
+            await refreshRecentDrafts()
+            await refreshDuplicateWarnings()
+        } catch {
+            for draftID in savedDraftIDs {
+                try? await draftStore.delete(id: draftID)
+            }
+            draftHistoryIssue = historyMessage(for: error)
+        }
+    }
+
+    private func synchronizeCurrentDraft() {
+        guard reviewDrafts.indices.contains(reviewDraftIndex) else { return }
+        reviewDrafts[reviewDraftIndex] = draft
+    }
+
+    private func refreshDuplicateWarnings() async {
+        let stored = PersistedDraft(
+            draft: draft,
+            extractionNotice: extractionNotice,
+            lifecycle: lifecycle(for: calendarState),
+            receipt: receipt(for: calendarState)
+        )
+        duplicateWarnings = (try? await draftStore.duplicateWarnings(for: stored)) ?? []
+    }
+
+    private func lifecycle(for state: CalendarCreationState) -> DraftLifecycle {
+        if case .created = state { return .created }
+        return .draft
+    }
+
+    private func receipt(for state: CalendarCreationState) -> CalendarCreationReceipt? {
+        if case .created(let receipt) = state { return receipt }
+        return nil
     }
 
     private func refreshRecentDrafts() async {
@@ -526,14 +689,39 @@ final class SnapCalModel {
             ?? "Recent drafts are temporarily unavailable."
     }
 
-    private func retainScreenshotIfEnabled(_ image: ValidatedImage) async {
+    private func retainScreenshotIfEnabled(
+        _ image: ValidatedImage,
+        draftIDs: [UUID]
+    ) async {
         guard screenshotHistoryEnabled, let data = image.originalData else {
             screenshotPreviewData = nil
             return
         }
+        var storedDraftIDs: [UUID] = []
         do {
-            try await screenshotVault.store(data, draftID: draft.id)
+            for draftID in draftIDs {
+                try await screenshotVault.store(data, draftID: draftID)
+                storedDraftIDs.append(draftID)
+            }
             screenshotPreviewData = data
+            privacyIssue = nil
+        } catch {
+            for draftID in storedDraftIDs {
+                try? await screenshotVault.delete(draftID: draftID)
+            }
+            screenshotPreviewData = nil
+            privacyIssue = privacyMessage(for: error)
+        }
+    }
+
+    private func loadScreenshotPreview(draftID: UUID) async {
+        guard screenshotHistoryEnabled else {
+            screenshotPreviewData = nil
+            privacyIssue = nil
+            return
+        }
+        do {
+            screenshotPreviewData = try await screenshotVault.load(draftID: draftID)
             privacyIssue = nil
         } catch {
             screenshotPreviewData = nil
@@ -572,6 +760,21 @@ final class SnapCalModel {
             result.location.confidence = min(result.location.confidence, 0.69)
         }
         return result
+    }
+
+    private func reconcile(cloud: [EventDraft], local: [EventDraft]) -> [EventDraft] {
+        var remainingLocal = local
+        return cloud.map { cloudDraft in
+            guard let cloudStart = cloudDraft.start.value,
+                  let matchingIndex = remainingLocal.firstIndex(where: { candidate in
+                      guard let localStart = candidate.start.value else { return false }
+                      return Calendar.current.isDate(cloudStart, inSameDayAs: localStart)
+                  }) else {
+                return reconcile(cloud: cloudDraft, local: nil)
+            }
+            let localDraft = remainingLocal.remove(at: matchingIndex)
+            return reconcile(cloud: cloudDraft, local: localDraft)
+        }
     }
 
     private func normalized(_ value: String) -> String {

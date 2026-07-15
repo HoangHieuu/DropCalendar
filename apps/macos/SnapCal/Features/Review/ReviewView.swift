@@ -15,6 +15,9 @@ struct ReviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     extractionSourcePanel
+                    if model.reviewDraftCount > 1 {
+                        multiEventNavigator
+                    }
                     if !draft.ambiguities.isEmpty {
                         ambiguityPanel
                     }
@@ -86,6 +89,44 @@ struct ReviewView: View {
         .accessibilityIdentifier("extractionSourcePanel")
     }
 
+    private var multiEventNavigator: some View {
+        GroupBox {
+            HStack(spacing: 14) {
+                Button {
+                    Task { await model.selectPreviousReviewDraft() }
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(!model.canSelectPreviousReviewDraft)
+                .accessibilityLabel("Previous event")
+                .accessibilityIdentifier("previousReviewEventButton")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Multiple events detected", systemImage: "calendar.badge.plus")
+                        .font(.headline)
+                    Text("Event \(model.reviewDraftIndex + 1) of \(model.reviewDraftCount)")
+                        .font(.callout.weight(.semibold))
+                    Text(draft.title.value ?? "Untitled event")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    Task { await model.selectNextReviewDraft() }
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(!model.canSelectNextReviewDraft)
+                .accessibilityLabel("Next event")
+                .accessibilityIdentifier("nextReviewEventButton")
+            }
+            .padding(8)
+        }
+        .accessibilityIdentifier("multiEventNavigator")
+    }
+
     private var extractionSourceTitle: String {
         switch model.extractionNotice {
         case .local: return "On-device extraction"
@@ -129,7 +170,9 @@ struct ReviewView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Review event draft")
                     .font(.title2.weight(.semibold))
-                Text("Check every detail. SnapCal creates nothing until you confirm.")
+                Text(model.reviewDraftCount > 1
+                    ? "Review each event separately. Every Calendar write needs its own confirmation."
+                    : "Check every detail. SnapCal creates nothing until you confirm.")
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -573,7 +616,10 @@ struct ReviewView: View {
         let duplicateMessage = model.duplicateWarnings.isEmpty
             ? ""
             : "\n\nPossible duplicate: a matching SnapCal draft already exists. Creating this event will override that warning."
-        return "\(title)\n\(start) – \(end)\(duplicateMessage)\n\nSnapCal will send these reviewed details and reminder choices to Google Calendar."
+        let position = model.reviewDraftCount > 1
+            ? "Event \(model.reviewDraftIndex + 1) of \(model.reviewDraftCount)\n"
+            : ""
+        return "\(position)\(title)\n\(start) – \(end)\(duplicateMessage)\n\nSnapCal will send only this reviewed event and its reminder choices to Google Calendar."
     }
 
     private var createButtonTitle: String {

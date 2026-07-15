@@ -1,10 +1,13 @@
 import AppKit
+import ImageIO
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NotchPanelLayout {
     static let collapsedWidth: CGFloat = 184
     static let expandedSize = CGSize(width: 372, height: 148)
+    static let windowLevel = NSWindow.Level.mainMenu
 
     static func size(topInset: CGFloat, isExpanded: Bool) -> CGSize {
         guard !isExpanded else { return expandedSize }
@@ -45,7 +48,12 @@ enum NotchDropSelectionError: Error, Equatable {
 }
 
 struct NotchDropSelection: Equatable {
-    let url: URL
+    enum Payload: Sendable, Equatable {
+        case file(URL)
+        case image(ClipboardImage)
+    }
+
+    let payload: Payload
     let ignoredItemCount: Int
 
     private static let supportedExtensions = Set(["png", "jpg", "jpeg", "heic"])
@@ -56,13 +64,215 @@ struct NotchDropSelection: Equatable {
             throw NotchDropSelectionError.unsupported
         }
         return NotchDropSelection(
-            url: selectedURL,
+            payload: .file(selectedURL),
             ignoredItemCount: max(0, urls.count - 1)
         )
     }
 
-    private static func isSupportedImage(_ url: URL) -> Bool {
+    static func isSupportedImage(_ url: URL) -> Bool {
         url.isFileURL && supportedExtensions.contains(url.pathExtension.lowercased())
+    }
+}
+
+@MainActor
+struct NotchDropProviderLoader {
+    static let supportedTypeIdentifiers = [
+        UTType.fileURL.identifier,
+        UTType.png.identifier,
+        UTType.jpeg.identifier,
+        UTType.heic.identifier,
+        UTType.tiff.identifier,
+        UTType.image.identifier
+    ]
+
+    private let now: () -> Date
+
+    init(now: @escaping () -> Date = Date.init) {
+        self.now = now
+    }
+
+    func select(from providers: [NSItemProvider]) async throws -> NotchDropSelection {
+        guard !providers.isEmpty else { throw NotchDropSelectionError.empty }
+
+        for provider in providers {
+            if let payload = await loadSupportedPayload(from: provider) {
+                return NotchDropSelection(
+                    payload: payload,
+                    ignoredItemCount: max(0, providers.count - 1)
+                )
+            }
+        }
+        throw NotchDropSelectionError.unsupported
+    }
+
+    private func loadSupportedPayload(
+        from provider: NSItemProvider
+    ) async -> NotchDropSelection.Payload? {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier),
+           let image = try? await loadFileURLImage(from: provider) {
+            return .image(image)
+        }
+
+        let dataTypes: [(type: UTType, fileExtension: String)] = [
+            (.png, "png"),
+            (.jpeg, "jpg"),
+            (.heic, "heic"),
+            (.tiff, "tiff")
+        ]
+        for candidate in dataTypes where provider.hasItemConformingToTypeIdentifier(
+            candidate.type.identifier
+        ) {
+            guard let data = try? await loadData(
+                from: provider,
+                typeIdentifier: candidate.type.identifier
+            ) else { continue }
+
+            if candidate.type == .tiff {
+                guard let pngData = convertTIFFToPNG(data) else { continue }
+                return .image(ClipboardImage(
+                    data: pngData,
+                    fileName: "Dropped Screenshot.png",
+                    capturedAt: now()
+                ))
+            }
+            return .image(ClipboardImage(
+                data: data,
+                fileName: "Dropped Screenshot.\(candidate.fileExtension)",
+                capturedAt: now()
+            ))
+        }
+
+        guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
+              let image = try? await loadTemporaryImage(from: provider) else {
+            return nil
+        }
+        return .image(image)
+    }
+
+    private func loadFileURLImage(from provider: NSItemProvider) async throws -> ClipboardImage {
+        let item: NSSecureCoding = try await withCheckedThrowingContinuation { continuation in
+            provider.loadItem(
+                forTypeIdentifier: UTType.fileURL.identifier,
+                options: nil
+            ) { item, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let item {
+                    continuation.resume(returning: item)
+                } else {
+                    continuation.resume(throwing: NotchDropSelectionError.unsupported)
+                }
+            }
+        }
+
+        let url: URL?
+        if let itemURL = item as? URL {
+            url = itemURL
+        } else if let itemURL = item as? NSURL {
+            url = itemURL as URL
+        } else if let string = item as? String {
+            url = URL(string: string)
+        } else if let data = item as? Data {
+            url = URL(dataRepresentation: data, relativeTo: nil)
+        } else {
+            url = nil
+        }
+        guard let url, url.isFileURL else {
+            throw NotchDropSelectionError.unsupported
+        }
+
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess { url.stopAccessingSecurityScopedResource() }
+        }
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+        let capturedAt = values?.contentModificationDate ?? now()
+
+        if NotchDropSelection.isSupportedImage(url) {
+            return ClipboardImage(
+                data: data,
+                fileName: url.lastPathComponent,
+                capturedAt: capturedAt
+            )
+        }
+        guard let normalized = Self.normalizedImage(data: data) else {
+            throw NotchDropSelectionError.unsupported
+        }
+        return ClipboardImage(
+            data: normalized.data,
+            fileName: "Dropped Screenshot.\(normalized.fileExtension)",
+            capturedAt: capturedAt
+        )
+    }
+
+    private func loadData(
+        from provider: NSItemProvider,
+        typeIdentifier: String
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: NotchDropSelectionError.unsupported)
+                }
+            }
+        }
+    }
+
+    private func loadTemporaryImage(
+        from provider: NSItemProvider
+    ) async throws -> ClipboardImage {
+        let capturedAt = now()
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<ClipboardImage, Error>) in
+            provider.loadFileRepresentation(
+                forTypeIdentifier: UTType.image.identifier
+            ) { url, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let url, let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+                      let normalized = Self.normalizedImage(data: data) else {
+                    continuation.resume(throwing: NotchDropSelectionError.unsupported)
+                    return
+                }
+                continuation.resume(returning: ClipboardImage(
+                    data: normalized.data,
+                    fileName: "Dropped Screenshot.\(normalized.fileExtension)",
+                    capturedAt: capturedAt
+                ))
+            }
+        }
+    }
+
+    private func convertTIFFToPNG(_ data: Data) -> Data? {
+        guard !data.isEmpty, let bitmap = NSBitmapImageRep(data: data) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    nonisolated private static func normalizedImage(
+        data: Data
+    ) -> (data: Data, fileExtension: String)? {
+        guard !data.isEmpty,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let typeIdentifier = CGImageSourceGetType(source) as String?,
+              let type = UTType(typeIdentifier) else {
+            return nil
+        }
+        if type.conforms(to: .png) { return (data, "png") }
+        if type.conforms(to: .jpeg) { return (data, "jpg") }
+        if type.conforms(to: .heic) { return (data, "heic") }
+        if type.conforms(to: .tiff),
+           let bitmap = NSBitmapImageRep(data: data),
+           let pngData = bitmap.representation(using: .png, properties: [:]) {
+            return (pngData, "png")
+        }
+        return nil
     }
 }
 
@@ -71,11 +281,16 @@ struct NotchDropImporter {
     let model: SnapCalModel
 
     func importSelection(_ selection: NotchDropSelection) async {
-        let didAccess = selection.url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess { selection.url.stopAccessingSecurityScopedResource() }
+        switch selection.payload {
+        case .file(let url):
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess { url.stopAccessingSecurityScopedResource() }
+            }
+            await model.importScreenshot(from: url)
+        case .image(let image):
+            await model.importInMemoryImage(image)
         }
-        await model.importScreenshot(from: selection.url)
     }
 }
 
@@ -92,7 +307,7 @@ private struct NotchDropZoneView: View {
     let presentation: NotchDropPresentation
     let onHoverChanged: (Bool) -> Void
     let onExpansionChanged: (Bool) -> Void
-    let onDrop: ([URL]) -> Void
+    let onDrop: ([NSItemProvider]) -> Void
 
     @State private var isDropTargeted = false
 
@@ -123,14 +338,13 @@ private struct NotchDropZoneView: View {
         }
         .contentShape(Rectangle())
         .onHover(perform: onHoverChanged)
-        .dropDestination(
-            for: URL.self,
-            action: { urls, _ in
-                onDrop(urls)
-                return true
-            },
-            isTargeted: { isDropTargeted = $0 }
-        )
+        .onDrop(
+            of: NotchDropProviderLoader.supportedTypeIdentifiers,
+            isTargeted: $isDropTargeted
+        ) { providers in
+            onDrop(providers)
+            return true
+        }
         .onChange(of: isExpanded) { _, newValue in
             onExpansionChanged(newValue)
         }
@@ -203,6 +417,7 @@ final class NotchPanelController: NSWindowController {
     private var screenObserver: NSObjectProtocol?
     private var statusTask: Task<Void, Never>?
     private var hoverExitTask: Task<Void, Never>?
+    private var isLoadingDrop = false
 
     private static let hoverExitDelayNanoseconds: UInt64 = 140_000_000
     private static let hoverExitPollNanoseconds: UInt64 = 80_000_000
@@ -224,7 +439,9 @@ final class NotchPanelController: NSWindowController {
         panel.hidesOnDeactivate = false
         panel.isMovable = false
         panel.isReleasedWhenClosed = false
-        panel.level = .statusBar
+        // Keep the drop surface above normal application windows without
+        // covering app-owned or system status items at `.statusBar` level.
+        panel.level = NotchPanelLayout.windowLevel
         panel.collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
@@ -237,7 +454,7 @@ final class NotchPanelController: NSWindowController {
             presentation: presentation,
             onHoverChanged: { [weak self] in self?.handleHoverChanged($0) },
             onExpansionChanged: { [weak self] in self?.setExpanded($0, animated: true) },
-            onDrop: { [weak self] in self?.handleDrop(urls: $0) }
+            onDrop: { [weak self] in self?.handleDrop(providers: $0) }
         ))
 
         screenObserver = NotificationCenter.default.addObserver(
@@ -324,7 +541,7 @@ final class NotchPanelController: NSWindowController {
         }
     }
 
-    private func handleDrop(urls: [URL]) {
+    private func handleDrop(providers: [NSItemProvider]) {
         if model.isCalendarOperationInProgress {
             showStatus("Finish the current Calendar action before importing another screenshot.", duration: 2.5)
             return
@@ -333,28 +550,34 @@ final class NotchPanelController: NSWindowController {
             showStatus("SnapCal is already processing a screenshot.", duration: 2)
             return
         }
-
-        let selection: NotchDropSelection
-        do {
-            selection = try NotchDropSelection.select(from: urls)
-        } catch {
-            revealMainWindow()
-            model.presentFailure(ImportIssue(
-                title: "Unsupported drop",
-                message: "Drop one PNG, JPG, JPEG, or HEIC screenshot."
-            ))
-            showStatus("That drop did not contain a supported image.", duration: 2.5)
+        guard !isLoadingDrop else {
+            showStatus("SnapCal is already reading a dropped screenshot.", duration: 2)
             return
         }
 
-        let message = selection.ignoredItemCount > 0
-            ? "Using the first supported image • \(selection.ignoredItemCount) other item(s) ignored"
-            : "Opening screenshot for review…"
-        showStatus(message, duration: selection.ignoredItemCount > 0 ? 2.5 : 1)
-        revealMainWindow()
-
+        isLoadingDrop = true
         Task { [weak self] in
             guard let self else { return }
+            defer { isLoadingDrop = false }
+
+            let selection: NotchDropSelection
+            do {
+                selection = try await NotchDropProviderLoader().select(from: providers)
+            } catch {
+                revealMainWindow()
+                model.presentFailure(ImportIssue(
+                    title: "Unsupported drop",
+                    message: "Drop one PNG, JPG, JPEG, or HEIC screenshot."
+                ))
+                showStatus("That drop did not contain a supported image.", duration: 2.5)
+                return
+            }
+
+            let message = selection.ignoredItemCount > 0
+                ? "Using the first supported image • \(selection.ignoredItemCount) other item(s) ignored"
+                : "Opening screenshot for review…"
+            showStatus(message, duration: selection.ignoredItemCount > 0 ? 2.5 : 1)
+            revealMainWindow()
             await NotchDropImporter(model: model).importSelection(selection)
         }
     }

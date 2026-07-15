@@ -30,8 +30,19 @@ protocol CloudEventExtracting {
 }
 
 struct CloudExtractionResult {
-    let draft: EventDraft
+    let drafts: [EventDraft]
     let model: String
+
+    init(drafts: [EventDraft], model: String) {
+        self.drafts = drafts
+        self.model = model
+    }
+
+    init(draft: EventDraft, model: String) {
+        self.init(drafts: [draft], model: model)
+    }
+
+    var draft: EventDraft { drafts[0] }
 }
 
 struct DisabledCloudEventExtractor: CloudEventExtracting {
@@ -53,6 +64,9 @@ enum CloudExtractionError: LocalizedError, Equatable {
     case rejected
     case invalidResponse
     case noEventDetected
+    case benchmarkBudgetExhausted
+    case benchmarkUsageUnavailable
+    case benchmarkPreflightFailed
 
     var errorDescription: String? {
         switch self {
@@ -70,6 +84,12 @@ enum CloudExtractionError: LocalizedError, Equatable {
             return "Accuracy Mode returned an invalid event proposal."
         case .noEventDetected:
             return "Accuracy Mode did not find reliable event evidence."
+        case .benchmarkBudgetExhausted:
+            return "The authorized Accuracy benchmark budget is exhausted."
+        case .benchmarkUsageUnavailable:
+            return "Accuracy benchmark cost could not be verified."
+        case .benchmarkPreflightFailed:
+            return "Accuracy benchmark provider limits could not be verified."
         }
     }
 }

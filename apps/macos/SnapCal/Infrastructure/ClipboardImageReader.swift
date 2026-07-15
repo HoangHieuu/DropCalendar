@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-struct ClipboardImage: Sendable {
+struct ClipboardImage: Sendable, Equatable {
     let data: Data
     let fileName: String
     let capturedAt: Date

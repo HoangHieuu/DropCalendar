@@ -33,13 +33,39 @@ struct AccuracyExtractionClient: CloudEventExtracting {
     private struct Response: Decodable {
         let schemaVersion: String
         let model: String
-        let event: Event
+        let events: [Event]
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion = "schema_version"
             case model
-            case event
+            case event, events
         }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            schemaVersion = try container.decode(String.self, forKey: .schemaVersion)
+            model = try container.decode(String.self, forKey: .model)
+            switch schemaVersion {
+            case "1":
+                events = [try container.decode(Event.self, forKey: .event)]
+            case "2":
+                events = try container.decode([Event].self, forKey: .events)
+            default:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .schemaVersion,
+                    in: container,
+                    debugDescription: "Unsupported extraction response schema"
+                )
+            }
+        }
+    }
+
+    private struct ErrorResponse: Decodable {
+        struct Detail: Decodable {
+            let code: String
+        }
+
+        let detail: Detail
     }
 
     private struct Event: Decodable {
@@ -158,36 +184,53 @@ struct AccuracyExtractionClient: CloudEventExtracting {
         case 200:
             break
         case 503:
+            if errorCode(in: data) == "benchmark_preflight_failed" {
+                throw CloudExtractionError.benchmarkPreflightFailed
+            }
             throw CloudExtractionError.notConfigured
         case 422:
             throw CloudExtractionError.rejected
+        case 402:
+            throw CloudExtractionError.benchmarkBudgetExhausted
+        case 502:
+            switch errorCode(in: data) {
+            case "benchmark_usage_unavailable":
+                throw CloudExtractionError.benchmarkUsageUnavailable
+            case "invalid_provider_output":
+                throw CloudExtractionError.invalidResponse
+            case "provider_rejected":
+                throw CloudExtractionError.rejected
+            default:
+                throw CloudExtractionError.unavailable
+            }
         default:
             throw CloudExtractionError.unavailable
         }
         guard data.count <= 1_000_000,
               let decoded = try? JSONDecoder().decode(Response.self, from: data),
-              decoded.schemaVersion == "1",
-              !decoded.model.isEmpty else {
+              !decoded.model.isEmpty,
+              (1...10).contains(decoded.events.count) else {
             throw CloudExtractionError.invalidResponse
         }
         return CloudExtractionResult(
-            draft: try makeDraft(
-                from: decoded,
-                lines: lines,
-                capturedAt: capturedAt,
-                sourceFileName: sourceFileName
-            ),
+            drafts: try decoded.events.map {
+                try makeDraft(
+                    from: $0,
+                    lines: lines,
+                    capturedAt: capturedAt,
+                    sourceFileName: sourceFileName
+                )
+            },
             model: decoded.model
         )
     }
 
     private func makeDraft(
-        from response: Response,
+        from event: Event,
         lines: [RecognizedTextLine],
         capturedAt: Date,
         sourceFileName: String
     ) throws -> EventDraft {
-        let event = response.event
         guard valid(event.title), valid(event.location), valid(event.description),
               valid(event.start), valid(event.end),
               let startDate = date(from: event.start, allDay: event.isAllDay) else {
@@ -233,6 +276,11 @@ struct AccuracyExtractionClient: CloudEventExtracting {
             isAllDay: event.isAllDay,
             ambiguities: ambiguities
         )
+    }
+
+    private func errorCode(in data: Data) -> String? {
+        guard data.count <= 100_000 else { return nil }
+        return try? JSONDecoder().decode(ErrorResponse.self, from: data).detail.code
     }
 
     private func valid(_ field: StringField) -> Bool {

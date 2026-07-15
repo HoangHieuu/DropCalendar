@@ -12,8 +12,12 @@ struct SnapCalApp: App {
         .defaultSize(width: 920, height: 680)
         .windowResizability(.contentMinSize)
 
-        MenuBarExtra("SnapCal", systemImage: "calendar.badge.plus") {
+        MenuBarExtra {
             SnapCalMenuBarView(model: model)
+        } label: {
+            Image(systemName: "calendar.badge.plus")
+                .accessibilityLabel("SnapCal")
+                .accessibilityIdentifier("snapCalMenuBarStatusItem")
         }
         .menuBarExtraStyle(.window)
 
