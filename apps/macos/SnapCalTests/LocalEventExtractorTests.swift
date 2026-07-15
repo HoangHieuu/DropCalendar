@@ -270,6 +270,57 @@ final class LocalEventExtractorTests: XCTestCase {
         XCTAssertEqual(draft.location.value, "University Campus, Ho Chi Minh City")
     }
 
+    func testExtractsTwoVietnameseTrainingEventsWithoutInventingEveningTimes() throws {
+        let extractor = LocalEventExtractor(calendar: calendar)
+        let drafts = try extractor.extractEvents(
+            lines: [
+                RecognizedTextLine(text: "Thông báo về buổi training AI RACE 2026", confidence: 0.98),
+                RecognizedTextLine(text: "1) Do btc vừa cập nhật lại đề thi cho bài 1, nên buổi training bài 1", confidence: 0.96),
+                RecognizedTextLine(text: "sẽ dời qua tối chủ nhật ngày 19/07/2026", confidence: 0.96),
+                RecognizedTextLine(text: "2) Buổi training cho bài 2 sẽ diễn ra vào tối thứ 5 ngày", confidence: 0.95),
+                RecognizedTextLine(text: "16/07/2026.", confidence: 0.95),
+                RecognizedTextLine(text: "Các bạn cập nhật lại lịch dùm ad nhé.", confidence: 0.94),
+            ],
+            capturedAt: makeDate(year: 2026, month: 7, day: 15, hour: 9),
+            sourceFileName: "training.png"
+        )
+
+        XCTAssertEqual(drafts.count, 2)
+        XCTAssertEqual(drafts[0].title.value, "buổi training bài 1")
+        XCTAssertEqual(drafts[1].title.value, "Buổi training cho bài 2")
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: try XCTUnwrap(drafts[0].start.value)),
+            DateComponents(year: 2026, month: 7, day: 19)
+        )
+        XCTAssertEqual(
+            calendar.dateComponents([.year, .month, .day], from: try XCTUnwrap(drafts[1].start.value)),
+            DateComponents(year: 2026, month: 7, day: 16)
+        )
+        XCTAssertTrue(drafts.allSatisfy(\.isAllDay))
+        XCTAssertTrue(drafts.allSatisfy {
+            $0.ambiguities.contains { ambiguity in
+                ambiguity.field == .dateTime && ambiguity.message.contains("No clock time")
+            }
+        })
+    }
+
+    func testNumberedAgendaWithoutIndependentDatesRemainsOneEvent() throws {
+        let extractor = LocalEventExtractor(calendar: calendar)
+        let drafts = try extractor.extractEvents(
+            lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.98),
+                RecognizedTextLine(text: "20h ngày 15/08/2026", confidence: 0.96),
+                RecognizedTextLine(text: "1) Welcome and check-in", confidence: 0.95),
+                RecognizedTextLine(text: "2) Model building exercise", confidence: 0.95),
+            ],
+            capturedAt: makeDate(year: 2026, month: 7, day: 15, hour: 9),
+            sourceFileName: "agenda.png"
+        )
+
+        XCTAssertEqual(drafts.count, 1)
+        XCTAssertEqual(drafts[0].title.value, "AI Workshop")
+    }
+
     private func region(y: Double, height: Double) -> TextRegion {
         TextRegion(x: 0.2, y: y, width: 0.6, height: height)
     }

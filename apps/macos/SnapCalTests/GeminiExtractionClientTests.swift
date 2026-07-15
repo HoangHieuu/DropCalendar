@@ -95,8 +95,81 @@ final class AccuracyExtractionClientTests: XCTestCase {
         }
     }
 
+    func testMapsBenchmarkBudgetExhaustionToFailClosedError() async throws {
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: URL(string: "http://127.0.0.1:8765/v1/benchmark/extract")!,
+            statusCode: 402,
+            httpVersion: nil,
+            headerFields: nil
+        ))
+        let body = #"{"detail":{"code":"benchmark_budget_exhausted","message":"redacted"}}"#
+        let transport = AccuracyRecordingTransport(data: Data(body.utf8), response: response)
+        let client = try AccuracyExtractionClient(
+            endpoint: URL(string: "http://127.0.0.1:8765/v1/benchmark/extract")!,
+            transport: transport
+        )
+
+        do {
+            _ = try await client.extract(
+                image: try makeValidatedImage(capturedAt: Date()),
+                lines: [RecognizedTextLine(text: "Poster", confidence: 0.9)],
+                capturedAt: Date(),
+                sourceFileName: "poster.jpg"
+            )
+            XCTFail("Expected benchmark budget exhaustion")
+        } catch {
+            XCTAssertEqual(error as? CloudExtractionError, .benchmarkBudgetExhausted)
+        }
+    }
+
+    func testDecodesVersionTwoMultipleEventResponseInSourceOrder() async throws {
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: URL(string: "http://127.0.0.1:8765/v1/extract")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        ))
+        let transport = AccuracyRecordingTransport(
+            data: Data(multipleEventResponse.utf8),
+            response: response
+        )
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")!
+        let client = try AccuracyExtractionClient(
+            endpoint: URL(string: "http://127.0.0.1:8765/v1/extract")!,
+            transport: transport,
+            calendar: calendar,
+            timeZone: calendar.timeZone,
+            locale: Locale(identifier: "vi_VN")
+        )
+
+        let result = try await client.extract(
+            image: try makeValidatedImage(capturedAt: Date()),
+            lines: [RecognizedTextLine(text: "Hai buổi training", confidence: 0.9)],
+            capturedAt: Date(),
+            sourceFileName: "training.png"
+        )
+
+        XCTAssertEqual(result.drafts.count, 2)
+        XCTAssertEqual(result.drafts[0].title.value, "Training bài 1")
+        XCTAssertEqual(result.drafts[1].title.value, "Training bài 2")
+        XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(result.drafts[0].start.value)), 19)
+        XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(result.drafts[1].start.value)), 16)
+        XCTAssertTrue(result.drafts.allSatisfy(\.isAllDay))
+    }
+
     private var validResponse: String {
         #"{"schema_version":"1","model":"google/gemini-3.1-flash-lite","event":{"title":{"value":"Agentic AI Build Week","evidence_text":"AGENTIC AI BUILD WEEK","confidence":0.98,"is_inferred":false},"start":{"date":"2026-07-08","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"end":{"date":"2026-07-12","time":null,"evidence_text":"July 8 - July 12, 2026","confidence":0.98,"is_inferred":false},"location":{"value":"Ho Chi Minh, Vietnam","evidence_text":"Ho Chi Minh, Vietnam","confidence":0.97,"is_inferred":false},"description":{"value":"5 Days (Workshops + Hackathon)","evidence_text":"5 Days (Workshops + Hackathon)","confidence":0.94,"is_inferred":false},"is_all_day":true,"ambiguities":[]}}"#
+    }
+
+    private var multipleEventResponse: String {
+        let first = #"{"title":{"value":"Training bài 1","evidence_text":"training bài 1","confidence":0.98,"is_inferred":false},"start":{"date":"2026-07-19","time":null,"evidence_text":"19/07/2026","confidence":0.98,"is_inferred":false},"end":{"date":"2026-07-19","time":null,"evidence_text":"19/07/2026","confidence":0.98,"is_inferred":false},"location":{"value":null,"evidence_text":null,"confidence":0.0,"is_inferred":false},"description":{"value":"Training bài 1","evidence_text":"training bài 1","confidence":0.9,"is_inferred":false},"is_all_day":true,"ambiguities":[{"field":"dateTime","message":"No clock time was shown.","severity":"medium"}]}"#
+        let second = first
+            .replacingOccurrences(of: "Training bài 1", with: "Training bài 2")
+            .replacingOccurrences(of: "training bài 1", with: "training bài 2")
+            .replacingOccurrences(of: "2026-07-19", with: "2026-07-16")
+            .replacingOccurrences(of: "19/07/2026", with: "16/07/2026")
+        return #"{"schema_version":"2","model":"google/gemini-3.1-flash-lite","events":[\#(first),\#(second)]}"#
     }
 
     private func makeValidatedImage(capturedAt: Date) throws -> ValidatedImage {

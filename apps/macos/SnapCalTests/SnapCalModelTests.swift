@@ -37,7 +37,7 @@ final class SnapCalModelTests: XCTestCase {
             extractor: LocalEventExtractor()
         )
         let selection = NotchDropSelection(
-            url: URL(fileURLWithPath: "/tmp/notch-workshop.png"),
+            payload: .file(URL(fileURLWithPath: "/tmp/notch-workshop.png")),
             ignoredItemCount: 0
         )
 
@@ -46,6 +46,36 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertEqual(model.phase, .review)
         XCTAssertEqual(model.draft.title.value, "AI Workshop")
         XCTAssertTrue(model.draft.requiresUserConfirmation)
+    }
+
+    func testInMemoryNotchDropReachesReviewWithoutCalendarWrite() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let scheduler = SpyCalendarScheduler()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler
+        )
+        let selection = NotchDropSelection(
+            payload: .image(ClipboardImage(
+                data: Data([0x89, 0x50, 0x4E, 0x47]),
+                fileName: "Dropped Screenshot.png",
+                capturedAt: capturedAt
+            )),
+            ignoredItemCount: 0
+        )
+
+        await NotchDropImporter(model: model).importSelection(selection)
+
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draft.title.value, "AI Workshop")
+        XCTAssertTrue(model.draft.requiresUserConfirmation)
+        let calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
     }
 
     func testValidationFailureIsRecoverable() async {
@@ -328,6 +358,57 @@ final class SnapCalModelTests: XCTestCase {
             model.extractionNotice,
             .localFallback(reason: "Accuracy Mode is temporarily unavailable.")
         )
+    }
+
+    func testMultipleEventsRequireIndependentReviewAndCalendarConfirmation() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_784_080_800)
+        let scheduler = SpyCalendarScheduler()
+        let store = SpyDraftStore()
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(
+                capturedAt: capturedAt,
+                sourceFingerprint: "two-training-events"
+            )),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "Thông báo về buổi training AI RACE 2026", confidence: 0.98),
+                RecognizedTextLine(text: "1) Buổi training bài 1 sẽ dời qua tối chủ nhật ngày 19/07/2026", confidence: 0.96),
+                RecognizedTextLine(text: "2) Buổi training cho bài 2 sẽ diễn ra vào tối thứ 5 ngày 16/07/2026", confidence: 0.95),
+            ]),
+            extractor: LocalEventExtractor(),
+            calendarScheduler: scheduler,
+            draftStore: store
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/training.png"))
+
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.reviewDraftCount, 2)
+        XCTAssertEqual(model.reviewDraftIndex, 0)
+        XCTAssertNotEqual(model.reviewDrafts[0].sourceFingerprint, model.reviewDrafts[1].sourceFingerprint)
+        XCTAssertTrue(model.duplicateWarnings.isEmpty)
+        var calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
+
+        model.requestCalendarCreation()
+        calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 0)
+        await model.confirmCalendarCreation()
+        calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 1)
+
+        await model.selectNextReviewDraft()
+        XCTAssertEqual(model.reviewDraftIndex, 1)
+        XCTAssertEqual(model.calendarState, .idle)
+        await model.confirmCalendarCreation()
+        calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 1)
+
+        model.requestCalendarCreation()
+        calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 1)
+        await model.confirmCalendarCreation()
+        calendarCalls = await scheduler.createCallCount()
+        XCTAssertEqual(calendarCalls, 2)
     }
 
     func testScreenshotRetentionIsDefaultOffAndNeverTouchesVault() async throws {

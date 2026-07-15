@@ -55,10 +55,14 @@ final class SnapCalUITests: XCTestCase {
     func testMenuBarEntryPointExposesClipboardAction() {
         launch(reset: true)
 
-        let snapCalStatusItem = app.menuBars.statusItems.firstMatch
+        let snapCalStatusItem = app.menuBars.statusItems["snapCalMenuBarStatusItem"]
         XCTAssertTrue(
             snapCalStatusItem.waitForExistence(timeout: 10),
-            "The SnapCal menu-bar status item should be visible to macOS accessibility."
+            "The specifically labeled SnapCal menu-bar status item should be visible to macOS accessibility."
+        )
+        XCTAssertTrue(
+            snapCalStatusItem.isHittable,
+            "The SnapCal status item should be available for pointer and assistive interaction."
         )
         snapCalStatusItem.click()
 
