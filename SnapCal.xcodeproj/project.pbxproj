@@ -47,6 +47,14 @@
 		B00000000000000000000029 /* DuplicateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000029 /* DuplicateDetectorTests.swift */; };
 		B0000000000000000000002A /* ScreenshotVaultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002A /* ScreenshotVaultTests.swift */; };
 		B0000000000000000000002B /* SnapCalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002B /* SnapCalUITests.swift */; };
+		B0000000000000000000002D /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002D /* Account.swift */; };
+		B0000000000000000000002E /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002E /* KeychainSecretStore.swift */; };
+		B0000000000000000000002F /* AccuracyImagePreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000002F /* AccuracyImagePreprocessor.swift */; };
+		B00000000000000000000030 /* SnapCalAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000030 /* SnapCalAPIClient.swift */; };
+		B00000000000000000000031 /* AccountBillingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000031 /* AccountBillingSettingsView.swift */; };
+		B00000000000000000000032 /* AppUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000032 /* AppUpdateController.swift */; };
+		B00000000000000000000033 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = Q00000000000000000000001 /* Sparkle */; };
+		B00000000000000000000034 /* PaidBetaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000034 /* PaidBetaTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -111,6 +119,13 @@
 		F0000000000000000000002A /* ScreenshotVaultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotVaultTests.swift; sourceTree = "<group>"; };
 		F0000000000000000000002B /* SnapCalUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalUITests.swift; sourceTree = "<group>"; };
 		F0000000000000000000002C /* SnapCalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SnapCalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000002D /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
+		F0000000000000000000002E /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
+		F0000000000000000000002F /* AccuracyImagePreprocessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccuracyImagePreprocessor.swift; sourceTree = "<group>"; };
+		F00000000000000000000030 /* SnapCalAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalAPIClient.swift; sourceTree = "<group>"; };
+		F00000000000000000000031 /* AccountBillingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountBillingSettingsView.swift; sourceTree = "<group>"; };
+		F00000000000000000000032 /* AppUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateController.swift; sourceTree = "<group>"; };
+		F00000000000000000000034 /* PaidBetaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaidBetaTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +133,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B00000000000000000000033 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -167,6 +183,7 @@
 			children = (
 				F00000000000000000000001 /* SnapCalApp.swift */,
 				F00000000000000000000002 /* ContentView.swift */,
+				F00000000000000000000032 /* AppUpdateController.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -186,6 +203,7 @@
 				F00000000000000000000010 /* CalendarEvent.swift */,
 				F00000000000000000000019 /* ExtractionMode.swift */,
 				F00000000000000000000024 /* TrustPolicies.swift */,
+				F0000000000000000000002D /* Account.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -206,6 +224,9 @@
 				F00000000000000000000021 /* SQLiteDraftStore.swift */,
 				F00000000000000000000025 /* LocationResolver.swift */,
 				F00000000000000000000026 /* ScreenshotVault.swift */,
+				F0000000000000000000002E /* KeychainSecretStore.swift */,
+				F0000000000000000000002F /* AccuracyImagePreprocessor.swift */,
+				F00000000000000000000030 /* SnapCalAPIClient.swift */,
 			);
 			path = Infrastructure;
 			sourceTree = "<group>";
@@ -239,6 +260,7 @@
 				F00000000000000000000028 /* ReminderPolicyTests.swift */,
 				F00000000000000000000029 /* DuplicateDetectorTests.swift */,
 				F0000000000000000000002A /* ScreenshotVaultTests.swift */,
+				F00000000000000000000034 /* PaidBetaTests.swift */,
 			);
 			path = apps/macos/SnapCalTests;
 			sourceTree = "<group>";
@@ -305,6 +327,7 @@
 			isa = PBXGroup;
 			children = (
 				F00000000000000000000027 /* PrivacySettingsView.swift */,
+				F00000000000000000000031 /* AccountBillingSettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -325,6 +348,9 @@
 			dependencies = (
 			);
 			name = SnapCal;
+			packageProductDependencies = (
+				Q00000000000000000000001 /* Sparkle */,
+			);
 			productName = SnapCal;
 			productReference = F0000000000000000000000E /* SnapCal.app */;
 			productType = "com.apple.product-type.application";
@@ -397,6 +423,9 @@
 				Base,
 			);
 			mainGroup = G00000000000000000000000;
+			packageReferences = (
+				X00000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			productRefGroup = G00000000000000000000009 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -463,6 +492,12 @@
 				B00000000000000000000025 /* LocationResolver.swift in Sources */,
 				B00000000000000000000026 /* ScreenshotVault.swift in Sources */,
 				B00000000000000000000027 /* PrivacySettingsView.swift in Sources */,
+				B0000000000000000000002D /* Account.swift in Sources */,
+				B0000000000000000000002E /* KeychainSecretStore.swift in Sources */,
+				B0000000000000000000002F /* AccuracyImagePreprocessor.swift in Sources */,
+				B00000000000000000000030 /* SnapCalAPIClient.swift in Sources */,
+				B00000000000000000000031 /* AccountBillingSettingsView.swift in Sources */,
+				B00000000000000000000032 /* AppUpdateController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -483,6 +518,7 @@
 				B00000000000000000000028 /* ReminderPolicyTests.swift in Sources */,
 				B00000000000000000000029 /* DuplicateDetectorTests.swift in Sources */,
 				B0000000000000000000002A /* ScreenshotVaultTests.swift in Sources */,
+				B00000000000000000000034 /* PaidBetaTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -557,11 +593,20 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = HKUD5AT6V6;
 				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SnapCal;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_SNAPCAL_API_BASE_URL = "";
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = NO;
+				INFOPLIST_KEY_SUFeedURL = "";
+				INFOPLIST_KEY_SUPublicEDKey = UNCONFIGURED;
+				INFOPLIST_KEY_SURequireSignedFeed = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(SNAPCAL_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -574,7 +619,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = apps/macos/SnapCal/SnapCal.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = HKUD5AT6V6;
 				ENABLE_APP_SANDBOX = YES;
@@ -583,11 +629,23 @@
 				INFOPLIST_KEY_CFBundleDisplayName = SnapCal;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				INFOPLIST_KEY_SNAPCAL_API_BASE_URL = "$(SNAPCAL_API_BASE_URL)";
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
+				INFOPLIST_KEY_SUFeedURL = "$(SNAPCAL_UPDATE_FEED_URL)";
+				INFOPLIST_KEY_SUPublicEDKey = "$(SNAPCAL_SPARKLE_PUBLIC_KEY)";
+				INFOPLIST_KEY_SURequireSignedFeed = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(SNAPCAL_APP_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				SNAPCAL_API_BASE_URL = "https://api.snapcal.invalid";
+				SNAPCAL_SPARKLE_PUBLIC_KEY = UNCONFIGURED;
+				SNAPCAL_UPDATE_FEED_URL = "https://updates.snapcal.invalid/appcast.xml";
 			};
 			name = Release;
 		};
@@ -650,6 +708,25 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		X00000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		Q00000000000000000000001 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = X00000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		L00000000000000000000001 /* Build configuration list for PBXProject "SnapCal" */ = {

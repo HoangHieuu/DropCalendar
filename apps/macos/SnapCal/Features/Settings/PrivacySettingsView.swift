@@ -42,7 +42,6 @@ struct PrivacySettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 430)
         .confirmationDialog(
             "Clear all SnapCal local history?",
             isPresented: $isClearConfirmationPresented,

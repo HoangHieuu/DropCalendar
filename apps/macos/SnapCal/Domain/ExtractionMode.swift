@@ -32,14 +32,33 @@ protocol CloudEventExtracting {
 struct CloudExtractionResult {
     let drafts: [EventDraft]
     let model: String
+    let quota: AccuracyQuota?
+    let providerCostUSD: Double?
 
-    init(drafts: [EventDraft], model: String) {
+    init(
+        drafts: [EventDraft],
+        model: String,
+        quota: AccuracyQuota? = nil,
+        providerCostUSD: Double? = nil
+    ) {
         self.drafts = drafts
         self.model = model
+        self.quota = quota
+        self.providerCostUSD = providerCostUSD
     }
 
-    init(draft: EventDraft, model: String) {
-        self.init(drafts: [draft], model: model)
+    init(
+        draft: EventDraft,
+        model: String,
+        quota: AccuracyQuota? = nil,
+        providerCostUSD: Double? = nil
+    ) {
+        self.init(
+            drafts: [draft],
+            model: model,
+            quota: quota,
+            providerCostUSD: providerCostUSD
+        )
     }
 
     var draft: EventDraft { drafts[0] }
@@ -67,6 +86,9 @@ enum CloudExtractionError: LocalizedError, Equatable {
     case benchmarkBudgetExhausted
     case benchmarkUsageUnavailable
     case benchmarkPreflightFailed
+    case quotaExhausted
+    case providerBudgetExhausted
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -90,6 +112,12 @@ enum CloudExtractionError: LocalizedError, Equatable {
             return "Accuracy benchmark cost could not be verified."
         case .benchmarkPreflightFailed:
             return "Accuracy benchmark provider limits could not be verified."
+        case .quotaExhausted:
+            return "Your Accuracy quota is exhausted until the next billing period."
+        case .providerBudgetExhausted:
+            return "Accuracy Mode is paused by its monthly safety budget."
+        case .timeout:
+            return "Accuracy Mode timed out. This screenshot was not charged."
         }
     }
 }

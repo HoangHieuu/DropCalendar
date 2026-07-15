@@ -37,6 +37,9 @@ struct CalendarCreationIssue: Equatable {
         case GoogleCalendarError.oauthBrokerUnavailable:
             title = "Google connection helper is unavailable"
             message = "Start SnapCal's local service and configure its Google OAuth credential file, then review and confirm again."
+        case GoogleCalendarError.hostedOAuthUnavailable:
+            title = "SnapCal connection is unavailable"
+            message = "Your Google connection and draft are preserved. Check your network, then review and confirm again."
         case GoogleCalendarError.oauthCredentialMismatch:
             title = "Google OAuth setup does not match"
             message = "The local service is using a different Google OAuth client. Check GOOGLE_OAUTH_CREDENTIALS_FILE, then try again."
@@ -69,6 +72,7 @@ enum GoogleCalendarError: Error, Equatable {
     case authorizationDenied
     case authorizationTimedOut
     case oauthBrokerUnavailable
+    case hostedOAuthUnavailable
     case oauthCredentialMismatch
     case invalidAuthorizationResponse
     case stateMismatch

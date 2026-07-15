@@ -15,6 +15,12 @@ struct ContentView: View {
                             get: { model.extractionMode },
                             set: { model.extractionMode = $0 }
                         ),
+                        canImport: model.canImportSelectedMode,
+                        accountMessage: model.accuracyAccountMessage,
+                        accountActionTitle: model.accuracyAccountActionTitle,
+                        onAccountAction: {
+                            Task { await model.performAccuracyAccountAction() }
+                        },
                         onChooseScreenshot: { isImporterPresented = true },
                         onPasteScreenshot: {
                             Task { await model.importClipboardImage() }
@@ -33,7 +39,11 @@ struct ContentView: View {
                     )
                 }
             case .processing(let fileName):
-                ProcessingView(fileName: fileName, mode: model.extractionMode)
+                ProcessingView(
+                    fileName: fileName,
+                    mode: model.extractionMode,
+                    stage: model.processingStage
+                )
             case .review:
                 ReviewView(model: model)
             case .failed(let issue):
@@ -47,6 +57,7 @@ struct ContentView: View {
         .frame(minWidth: 760, minHeight: 560)
         .task {
             await model.loadCalendarConnectionStatus()
+            await model.loadAccountState()
             await model.loadRecentDrafts()
         }
         .fileImporter(

@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-struct AccuracyExtractionClient: CloudEventExtracting {
+struct AccuracyExtractionClient: OptimizedCloudEventExtracting {
     private struct Request: Encodable {
         let schemaVersion = "1"
         let imageBase64: String
@@ -31,13 +31,22 @@ struct AccuracyExtractionClient: CloudEventExtracting {
     }
 
     private struct Response: Decodable {
+        struct Usage: Decodable {
+            let requestCostUSD: Double
+
+            enum CodingKeys: String, CodingKey {
+                case requestCostUSD = "request_cost_usd"
+            }
+        }
+
         let schemaVersion: String
         let model: String
         let events: [Event]
+        let usage: Usage?
 
         enum CodingKeys: String, CodingKey {
             case schemaVersion = "schema_version"
-            case model
+            case model, usage
             case event, events
         }
 
@@ -45,6 +54,7 @@ struct AccuracyExtractionClient: CloudEventExtracting {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             schemaVersion = try container.decode(String.self, forKey: .schemaVersion)
             model = try container.decode(String.self, forKey: .model)
+            usage = try container.decodeIfPresent(Usage.self, forKey: .usage)
             switch schemaVersion {
             case "1":
                 events = [try container.decode(Event.self, forKey: .event)]
@@ -121,13 +131,15 @@ struct AccuracyExtractionClient: CloudEventExtracting {
     private let calendar: Calendar
     private let timeZone: TimeZone
     private let locale: Locale
+    private let preprocessor: AccuracyImagePreprocessor
 
     init(
         endpoint: URL,
         transport: any HTTPTransport = URLSessionHTTPTransport(),
         calendar: Calendar = .current,
         timeZone: TimeZone = .current,
-        locale: Locale = .current
+        locale: Locale = .current,
+        preprocessor: AccuracyImagePreprocessor = AccuracyImagePreprocessor()
     ) throws {
         guard Self.isAllowed(endpoint: endpoint) else {
             throw CloudExtractionError.invalidConfiguration
@@ -137,6 +149,7 @@ struct AccuracyExtractionClient: CloudEventExtracting {
         self.calendar = calendar
         self.timeZone = timeZone
         self.locale = locale
+        self.preprocessor = preprocessor
     }
 
     static func live() -> any CloudEventExtracting {
@@ -150,19 +163,23 @@ struct AccuracyExtractionClient: CloudEventExtracting {
         return client
     }
 
+    func prepare(image: ValidatedImage) async throws -> PreparedAccuracyImage {
+        try await preprocessor.prepare(image.cgImage)
+    }
+
     func extract(
-        image: ValidatedImage,
+        preparedImage: PreparedAccuracyImage,
         lines: [RecognizedTextLine],
         capturedAt: Date,
         sourceFileName: String
     ) async throws -> CloudExtractionResult {
-        let jpeg = try encodeJPEG(image.cgImage)
+        let submittedLines = Self.boundedOCR(lines)
         let body = Request(
-            imageBase64: jpeg.base64EncodedString(),
+            imageBase64: preparedImage.jpegData.base64EncodedString(),
             capturedAt: capturedAt,
             timeZone: timeZone.identifier,
             locale: locale.identifier,
-            ocrLines: lines.map {
+            ocrLines: submittedLines.map {
                 OCRLine(text: $0.text, confidence: $0.confidence, box: $0.region)
             }
         )
@@ -206,6 +223,20 @@ struct AccuracyExtractionClient: CloudEventExtracting {
         default:
             throw CloudExtractionError.unavailable
         }
+        return try decodeResponse(
+            data,
+            lines: submittedLines,
+            capturedAt: capturedAt,
+            sourceFileName: sourceFileName
+        )
+    }
+
+    func decodeResponse(
+        _ data: Data,
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) throws -> CloudExtractionResult {
         guard data.count <= 1_000_000,
               let decoded = try? JSONDecoder().decode(Response.self, from: data),
               !decoded.model.isEmpty,
@@ -221,7 +252,8 @@ struct AccuracyExtractionClient: CloudEventExtracting {
                     sourceFileName: sourceFileName
                 )
             },
-            model: decoded.model
+            model: decoded.model,
+            providerCostUSD: decoded.usage?.requestCostUSD
         )
     }
 
@@ -371,27 +403,29 @@ struct AccuracyExtractionClient: CloudEventExtracting {
         }
     }
 
-    private func encodeJPEG(_ image: CGImage) throws -> Data {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.jpeg.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw CloudExtractionError.imageEncodingFailed
+    static func boundedOCR(_ lines: [RecognizedTextLine]) -> [RecognizedTextLine] {
+        var submitted: [RecognizedTextLine] = []
+        var characters = 0
+        for line in lines.prefix(150) {
+            let remaining = 20_000 - characters
+            guard remaining > 0 else { break }
+            if line.text.count <= remaining {
+                submitted.append(line)
+                characters += line.text.count
+            } else {
+                let prefix = String(line.text.prefix(remaining))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !prefix.isEmpty {
+                    submitted.append(RecognizedTextLine(
+                        text: prefix,
+                        confidence: line.confidence,
+                        region: line.region
+                    ))
+                }
+                break
+            }
         }
-        CGImageDestinationAddImage(
-            destination,
-            image,
-            [kCGImageDestinationLossyCompressionQuality: 0.86] as CFDictionary
-        )
-        guard CGImageDestinationFinalize(destination),
-              data.length > 0,
-              data.length <= ImageValidator.maximumBytes else {
-            throw CloudExtractionError.imageEncodingFailed
-        }
-        return data as Data
+        return submitted
     }
 
     private static func isAllowed(endpoint: URL) -> Bool {

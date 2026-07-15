@@ -150,13 +150,16 @@ actor GoogleCalendarScheduler: CalendarScheduling {
         self.calendarClient = calendarClient
     }
 
-    static func live() -> GoogleCalendarScheduler {
+    static func live(
+        tokenBroker: (any OAuthTokenBrokering)? = nil
+    ) -> GoogleCalendarScheduler {
         let configuration = GoogleOAuthConfiguration.live
         let store = KeychainCredentialStore(account: configuration.clientID)
         return GoogleCalendarScheduler(
             oauth: GoogleOAuthService(
                 configuration: configuration,
-                credentialStore: store
+                credentialStore: store,
+                tokenBroker: tokenBroker
             ),
             calendarClient: GoogleCalendarClient()
         )

@@ -26,6 +26,13 @@ struct OAuthAccessToken: Equatable, Sendable {
     }
 }
 
+struct OAuthAuthorizationGrant: Equatable, Sendable {
+    let code: String
+    let verifier: String
+    let redirectURI: URL
+    let nonce: String?
+}
+
 struct OAuthTokenResponse: Decodable, Equatable, Sendable {
     let accessToken: String
     let expiresIn: Double
@@ -36,6 +43,28 @@ struct OAuthTokenResponse: Decodable, Equatable, Sendable {
         case expiresIn = "expires_in"
         case refreshToken = "refresh_token"
     }
+}
+
+struct OAuthTokenBrokerRequest: Encodable, Equatable, Sendable {
+    let clientID: String
+    let grantType: String
+    let code: String?
+    let codeVerifier: String?
+    let redirectURI: String?
+    let refreshToken: String?
+
+    enum CodingKeys: String, CodingKey {
+        case clientID = "client_id"
+        case grantType = "grant_type"
+        case code
+        case codeVerifier = "code_verifier"
+        case redirectURI = "redirect_uri"
+        case refreshToken = "refresh_token"
+    }
+}
+
+protocol OAuthTokenBrokering: Sendable {
+    func exchange(_ request: OAuthTokenBrokerRequest) async throws -> OAuthTokenResponse
 }
 
 enum OAuthSecurity {
@@ -84,24 +113,6 @@ enum OAuthCallbackParser {
 }
 
 actor GoogleOAuthService {
-    private struct TokenBrokerRequest: Encodable {
-        let clientID: String
-        let grantType: String
-        let code: String?
-        let codeVerifier: String?
-        let redirectURI: String?
-        let refreshToken: String?
-
-        enum CodingKeys: String, CodingKey {
-            case clientID = "client_id"
-            case grantType = "grant_type"
-            case code
-            case codeVerifier = "code_verifier"
-            case redirectURI = "redirect_uri"
-            case refreshToken = "refresh_token"
-        }
-    }
-
     private struct TokenBrokerErrorResponse: Decodable {
         struct Detail: Decodable {
             let code: String
@@ -113,16 +124,19 @@ actor GoogleOAuthService {
     private let configuration: GoogleOAuthConfiguration
     private let credentialStore: any OAuthCredentialStoring
     private let transport: any HTTPTransport
+    private let tokenBroker: (any OAuthTokenBrokering)?
     private var accessToken: OAuthAccessToken?
 
     init(
         configuration: GoogleOAuthConfiguration,
         credentialStore: any OAuthCredentialStoring,
-        transport: any HTTPTransport = URLSessionHTTPTransport()
+        transport: any HTTPTransport = URLSessionHTTPTransport(),
+        tokenBroker: (any OAuthTokenBrokering)? = nil
     ) {
         self.configuration = configuration
         self.credentialStore = credentialStore
         self.transport = transport
+        self.tokenBroker = tokenBroker
     }
 
     func hasStoredAuthorization() async -> Bool {
@@ -152,6 +166,24 @@ actor GoogleOAuthService {
     }
 
     private func authorizeInteractively() async throws -> String {
+        let grant = try await authorizationGrant(
+            scope: configuration.scope,
+            promptConsent: true,
+            nonce: nil
+        )
+        let tokenResponse = try await exchangeAuthorizationCode(
+            grant.code,
+            verifier: grant.verifier,
+            redirectURI: grant.redirectURI
+        )
+        return await acceptInteractiveTokenResponse(tokenResponse)
+    }
+
+    func authorizationGrant(
+        scope: String,
+        promptConsent: Bool,
+        nonce: String?
+    ) async throws -> OAuthAuthorizationGrant {
         let callbackServer = try LoopbackOAuthServer()
         let redirectURI = try await callbackServer.start()
         let verifier = try OAuthSecurity.randomURLSafeString(byteCount: 48)
@@ -159,7 +191,10 @@ actor GoogleOAuthService {
         let authorizationURL = try makeAuthorizationURL(
             redirectURI: redirectURI,
             verifier: verifier,
-            state: state
+            state: state,
+            scope: scope,
+            promptConsent: promptConsent,
+            nonce: nonce
         )
 
         let didOpen = await MainActor.run {
@@ -172,12 +207,12 @@ actor GoogleOAuthService {
 
         let callbackURL = try await waitForCallback(from: callbackServer)
         let code = try OAuthCallbackParser.authorizationCode(from: callbackURL, expectedState: state)
-        let tokenResponse = try await exchangeAuthorizationCode(
-            code,
+        return OAuthAuthorizationGrant(
+            code: code,
             verifier: verifier,
-            redirectURI: redirectURI
+            redirectURI: redirectURI,
+            nonce: nonce
         )
-        return await acceptInteractiveTokenResponse(tokenResponse)
     }
 
     private func waitForCallback(from server: LoopbackOAuthServer) async throws -> URL {
@@ -198,7 +233,7 @@ actor GoogleOAuthService {
     }
 
     private func refreshAccessToken(using refreshToken: String) async throws -> String {
-        let tokenResponse = try await performTokenRequest(TokenBrokerRequest(
+        let tokenResponse = try await performTokenRequest(OAuthTokenBrokerRequest(
             clientID: configuration.clientID,
             grantType: "refresh_token",
             code: nil,
@@ -214,7 +249,7 @@ actor GoogleOAuthService {
         verifier: String,
         redirectURI: URL
     ) async throws -> OAuthTokenResponse {
-        try await performTokenRequest(TokenBrokerRequest(
+        try await performTokenRequest(OAuthTokenBrokerRequest(
             clientID: configuration.clientID,
             grantType: "authorization_code",
             code: code,
@@ -224,7 +259,16 @@ actor GoogleOAuthService {
         ))
     }
 
-    private func performTokenRequest(_ payload: TokenBrokerRequest) async throws -> OAuthTokenResponse {
+    private func performTokenRequest(_ payload: OAuthTokenBrokerRequest) async throws -> OAuthTokenResponse {
+        if let tokenBroker {
+            do {
+                return try await tokenBroker.exchange(payload)
+            } catch let error as GoogleCalendarError {
+                throw error
+            } catch {
+                throw GoogleCalendarError.oauthBrokerUnavailable
+            }
+        }
         var request = URLRequest(url: configuration.tokenBrokerEndpoint)
         request.httpMethod = "POST"
         request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -276,7 +320,10 @@ actor GoogleOAuthService {
     private func makeAuthorizationURL(
         redirectURI: URL,
         verifier: String,
-        state: String
+        state: String,
+        scope: String,
+        promptConsent: Bool,
+        nonce: String?
     ) throws -> URL {
         guard var components = URLComponents(
             url: configuration.authorizationEndpoint,
@@ -284,17 +331,24 @@ actor GoogleOAuthService {
         ) else {
             throw GoogleCalendarError.invalidConfiguration
         }
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "client_id", value: configuration.clientID),
             URLQueryItem(name: "redirect_uri", value: redirectURI.absoluteString),
             URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: configuration.scope),
+            URLQueryItem(name: "scope", value: scope),
             URLQueryItem(name: "access_type", value: "offline"),
-            URLQueryItem(name: "prompt", value: "consent"),
+            URLQueryItem(name: "include_granted_scopes", value: "true"),
             URLQueryItem(name: "code_challenge", value: OAuthSecurity.codeChallenge(for: verifier)),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "state", value: state)
         ]
+        if promptConsent {
+            queryItems.append(URLQueryItem(name: "prompt", value: "consent"))
+        }
+        if let nonce {
+            queryItems.append(URLQueryItem(name: "nonce", value: nonce))
+        }
+        components.queryItems = queryItems
         guard let url = components.url else {
             throw GoogleCalendarError.invalidConfiguration
         }

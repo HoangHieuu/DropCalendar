@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SnapCalMenuBarView: View {
     @Bindable var model: SnapCalModel
+    let updates: AppUpdateController
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
@@ -20,6 +21,16 @@ struct SnapCalMenuBarView: View {
             .pickerStyle(.menu)
             .accessibilityIdentifier("menuBarExtractionModePicker")
 
+            if model.extractionMode == .accuracy,
+               let message = model.accuracyAccountMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(
+                        model.canUseAccuracy ? Color.secondary : Color.orange
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider()
 
             Button {
@@ -35,7 +46,11 @@ struct SnapCalMenuBarView: View {
                 Label("Paste Screenshot", systemImage: "doc.on.clipboard")
             }
             .keyboardShortcut("v")
-            .disabled(model.isCalendarOperationInProgress || isProcessing)
+            .disabled(
+                model.isCalendarOperationInProgress ||
+                    isProcessing ||
+                    !model.canImportSelectedMode
+            )
             .accessibilityIdentifier("menuBarPasteScreenshotButton")
 
             if !model.recentDrafts.isEmpty {
@@ -66,7 +81,15 @@ struct SnapCalMenuBarView: View {
             Button {
                 openSettings()
             } label: {
-                Label("Privacy & History…", systemImage: "hand.raised")
+                Label("Account, Billing & Privacy…", systemImage: "person.crop.circle")
+            }
+
+            if updates.isConfigured {
+                Button {
+                    updates.checkForUpdates()
+                } label: {
+                    Label("Check for Updates…", systemImage: "arrow.triangle.2.circlepath")
+                }
             }
 
             Button("Quit SnapCal") {

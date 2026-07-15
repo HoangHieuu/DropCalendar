@@ -2,6 +2,10 @@ import SwiftUI
 
 struct ImportView: View {
     @Binding var extractionMode: ExtractionMode
+    let canImport: Bool
+    let accountMessage: String?
+    let accountActionTitle: String?
+    let onAccountAction: () -> Void
     let onChooseScreenshot: () -> Void
     let onPasteScreenshot: () -> Void
 
@@ -45,6 +49,21 @@ struct ImportView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 620)
                     .accessibilityIdentifier("extractionModeDisclosure")
+
+                if extractionMode == .accuracy, let accountMessage {
+                    VStack(spacing: 8) {
+                        Text(accountMessage)
+                            .font(.callout)
+                            .foregroundStyle(canImport ? Color.secondary : Color.orange)
+                            .multilineTextAlignment(.center)
+                        if let accountActionTitle {
+                            Button(accountActionTitle, action: onAccountAction)
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                    .frame(maxWidth: 620)
+                    .accessibilityIdentifier("accuracyAccountStatus")
+                }
             }
 
             HStack(spacing: 12) {
@@ -56,6 +75,7 @@ struct ImportView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
+                .disabled(!canImport)
                 .accessibilityIdentifier("chooseScreenshotButton")
 
                 Button(action: onPasteScreenshot) {
@@ -65,6 +85,7 @@ struct ImportView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .keyboardShortcut("v")
+                .disabled(!canImport)
                 .accessibilityIdentifier("pasteScreenshotButton")
             }
 
@@ -100,7 +121,7 @@ struct ImportView: View {
         case .localOnly:
             return "Local Only favors privacy over semantic accuracy. Use Accuracy Mode when wording or poster context is complex."
         case .accuracy:
-            return "Accuracy Mode is opt-in. SnapCal's local service does not persist the image; nothing is added to a calendar until you confirm."
+            return "Accuracy Mode is opt-in. Screenshots and full OCR are never retained by SnapCal; an encrypted retry result expires after 15 minutes. Nothing is added to a calendar until you confirm."
         }
     }
 }
@@ -108,12 +129,13 @@ struct ImportView: View {
 struct ProcessingView: View {
     let fileName: String
     let mode: ExtractionMode
+    let stage: ProcessingStage
 
     var body: some View {
         VStack(spacing: 20) {
             ProgressView()
                 .controlSize(.large)
-            Text("Reading event details…")
+            Text(stage.rawValue + "…")
                 .font(.title2.weight(.semibold))
             Text(fileName)
                 .foregroundStyle(.secondary)

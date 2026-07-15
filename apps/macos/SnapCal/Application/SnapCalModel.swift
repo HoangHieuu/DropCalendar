@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -30,6 +31,9 @@ struct ImportIssue: Equatable {
         } else if let ocrError = error as? VisionOCRError {
             title = "Text recognition failed"
             message = ocrError.errorDescription ?? "SnapCal could not read text from this screenshot."
+        } else if let accountError = error as? SnapCalAccountError {
+            title = "Accuracy Mode unavailable"
+            message = accountError.errorDescription ?? "Use Local Only or review your SnapCal account."
         } else {
             title = "Import failed"
             message = error.localizedDescription
@@ -58,6 +62,9 @@ final class SnapCalModel {
     var screenshotHistoryEnabled = false
     var screenshotPreviewData: Data?
     var privacyIssue: String?
+    var accountState: AccountState = .unavailable
+    private(set) var proPlan: AccountPlan?
+    var processingStage: ProcessingStage = .preparing
 
     private let validator: any ImageValidating
     private let clipboardReader: any ClipboardImageReading
@@ -69,6 +76,8 @@ final class SnapCalModel {
     private let locationResolver: any LocationResolving
     private let screenshotVault: any ScreenshotVaulting
     private let privacyPreferences: any PrivacyPreferenceStoring
+    private let accountService: any AccountServicing
+    private let accuracyAccessPolicy: AccuracyAccessPolicy
     private let now: () -> Date
     private var pendingDraftSave: Task<Void, Never>?
     private var reviewCalendarStates: [UUID: CalendarCreationState] = [:]
@@ -84,6 +93,8 @@ final class SnapCalModel {
         locationResolver: any LocationResolving = DisabledLocationResolver(),
         screenshotVault: any ScreenshotVaulting = DisabledScreenshotVault(),
         privacyPreferences: any PrivacyPreferenceStoring = InMemoryPrivacyPreferenceStore(),
+        accountService: any AccountServicing = DisabledAccountService(),
+        accuracyAccessPolicy: AccuracyAccessPolicy = .development,
         now: @escaping () -> Date = Date.init
     ) {
         self.validator = validator
@@ -96,6 +107,8 @@ final class SnapCalModel {
         self.locationResolver = locationResolver
         self.screenshotVault = screenshotVault
         self.privacyPreferences = privacyPreferences
+        self.accountService = accountService
+        self.accuracyAccessPolicy = accuracyAccessPolicy
         self.now = now
         screenshotHistoryEnabled = privacyPreferences.screenshotHistoryEnabled
     }
@@ -119,17 +132,43 @@ final class SnapCalModel {
         } catch {
             screenshotVault = UnavailableScreenshotVault()
         }
+        let cloudExtractor: any CloudEventExtracting
+        let accountService: any AccountServicing
+        let calendarScheduler: any CalendarScheduling
+        let accuracyAccessPolicy: AccuracyAccessPolicy
+        let configuredAPI = environment["SNAPCAL_API_BASE_URL"]
+            ?? (Bundle.main.object(forInfoDictionaryKey: "SNAPCAL_API_BASE_URL") as? String)
+        if let configuredAPI,
+           let baseURL = URL(string: configuredAPI),
+           let productionClient = try? SnapCalAPIClient.live(baseURL: baseURL) {
+            cloudExtractor = productionClient
+            accountService = productionClient
+            calendarScheduler = GoogleCalendarScheduler.live(tokenBroker: productionClient)
+            accuracyAccessPolicy = .proRequired
+        } else if configuredAPI != nil {
+            cloudExtractor = DisabledCloudEventExtractor()
+            accountService = DisabledAccountService()
+            calendarScheduler = DisabledCalendarScheduler()
+            accuracyAccessPolicy = .proRequired
+        } else {
+            cloudExtractor = AccuracyExtractionClient.live()
+            accountService = DisabledAccountService()
+            calendarScheduler = GoogleCalendarScheduler.live()
+            accuracyAccessPolicy = .development
+        }
         return SnapCalModel(
             validator: ImageValidator(),
             clipboardReader: SystemClipboardImageReader(),
             ocrService: VisionOCRService(),
             extractor: LocalEventExtractor(),
-            cloudExtractor: AccuracyExtractionClient.live(),
-            calendarScheduler: GoogleCalendarScheduler.live(),
+            cloudExtractor: cloudExtractor,
+            calendarScheduler: calendarScheduler,
             draftStore: draftStore,
             locationResolver: MapKitLocationResolver(),
             screenshotVault: screenshotVault,
-            privacyPreferences: UserDefaultsPrivacyPreferenceStore()
+            privacyPreferences: UserDefaultsPrivacyPreferenceStore(),
+            accountService: accountService,
+            accuracyAccessPolicy: accuracyAccessPolicy
         )
     }
 
@@ -183,8 +222,168 @@ final class SnapCalModel {
             draftStore: draftStore,
             locationResolver: DisabledLocationResolver(),
             screenshotVault: DisabledScreenshotVault(),
-            privacyPreferences: InMemoryPrivacyPreferenceStore()
+            privacyPreferences: InMemoryPrivacyPreferenceStore(),
+            accountService: DisabledAccountService(),
+            accuracyAccessPolicy: .development
         )
+    }
+
+    var canImportSelectedMode: Bool {
+        extractionMode == .localOnly || canUseAccuracy
+    }
+
+    var canUseAccuracy: Bool {
+        switch accuracyAccessPolicy {
+        case .development:
+            return true
+        case .proRequired:
+            return accountState.snapshot?.canUseAccuracy == true
+        }
+    }
+
+    var accuracyAccountMessage: String? {
+        guard accuracyAccessPolicy == .proRequired else { return nil }
+        switch accountState {
+        case .unavailable:
+            return "SnapCal's hosted service is not configured. Local Only remains available."
+        case .loading:
+            return "Checking your SnapCal account…"
+        case .signedOut:
+            return "Sign in with Google and connect Calendar to use Accuracy Mode."
+        case .failed(let issue):
+            return issue.message
+        case .signedIn(let account):
+            if !account.invited {
+                return "Accuracy Mode is currently limited to invited beta users."
+            }
+            if account.isQuotaExhausted {
+                return "All \(account.quota.limit) Accuracy imports are used for this billing period."
+            }
+            if account.subscriptionStatus == "past_due" {
+                return "Payment needs attention. Accuracy remains available temporarily."
+            }
+            if account.canUseAccuracy {
+                return "\(account.quota.remaining) of \(account.quota.limit) Accuracy imports remaining."
+            }
+            if account.subscriptionStatus != "none" {
+                return "Accuracy Mode is disabled for this subscription. Open Manage Billing to review it."
+            }
+            return proPlanOfferMessage
+        }
+    }
+
+    var proPlanOfferMessage: String {
+        guard let proPlan else {
+            return "Pro Beta pricing is temporarily unavailable."
+        }
+        let price = String(
+            format: "US$%.2f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            Double(proPlan.priceUSDCents) / 100
+        )
+        return "\(proPlan.displayName) is \(price)/month and includes \(proPlan.monthlyQuota) successful Accuracy screenshot imports per billing period."
+    }
+
+    var accuracyAccountActionTitle: String? {
+        guard accuracyAccessPolicy == .proRequired else { return nil }
+        switch accountState {
+        case .signedOut, .failed:
+            return "Sign In with Google"
+        case .signedIn(let account) where account.paymentWarning ||
+            (account.subscriptionStatus != "none" && !account.canUseAccuracy && !account.isQuotaExhausted):
+            return "Manage Billing"
+        case .signedIn(let account) where account.subscriptionStatus == "none" &&
+            !account.isQuotaExhausted && account.invited:
+            return "Subscribe to Pro"
+        default:
+            return nil
+        }
+    }
+
+    func loadAccountState() async {
+        guard accuracyAccessPolicy == .proRequired else {
+            accountState = .unavailable
+            return
+        }
+        accountState = .loading
+        do {
+            if let snapshot = try await accountService.restoreSession() {
+                accountState = .signedIn(snapshot)
+                await refreshPlanCatalog()
+            } else {
+                accountState = .signedOut
+            }
+        } catch {
+            accountState = .failed(accountIssue(for: error))
+        }
+    }
+
+    func signInToSnapCal() async {
+        accountState = .loading
+        do {
+            accountState = .signedIn(try await accountService.signIn())
+            await refreshPlanCatalog()
+        } catch {
+            accountState = .failed(accountIssue(for: error))
+        }
+    }
+
+    func refreshSnapCalAccount() async {
+        guard accuracyAccessPolicy == .proRequired else { return }
+        do {
+            accountState = .signedIn(try await accountService.refreshAccount())
+            if proPlan == nil { await refreshPlanCatalog() }
+        } catch SnapCalAccountError.authenticationRequired {
+            accountState = .signedOut
+        } catch {
+            accountState = .failed(accountIssue(for: error))
+        }
+    }
+
+    func subscribeToPro() async {
+        do {
+            let url = try await accountService.checkoutURL()
+            guard NSWorkspace.shared.open(url) else {
+                throw SnapCalAccountError.billingUnavailable
+            }
+        } catch {
+            accountState = .failed(accountIssue(for: error))
+        }
+    }
+
+    func manageBilling() async {
+        do {
+            let url = try await accountService.portalURL()
+            guard NSWorkspace.shared.open(url) else {
+                throw SnapCalAccountError.billingUnavailable
+            }
+        } catch {
+            accountState = .failed(accountIssue(for: error))
+        }
+    }
+
+    func performAccuracyAccountAction() async {
+        switch accuracyAccountActionTitle {
+        case "Sign In with Google":
+            await signInToSnapCal()
+        case "Subscribe to Pro":
+            await subscribeToPro()
+        case "Manage Billing":
+            await manageBilling()
+        default:
+            break
+        }
+    }
+
+    func signOutOfSnapCal() async {
+        await accountService.signOut()
+        accountState = .signedOut
+        extractionMode = .localOnly
+    }
+
+    private func refreshPlanCatalog() async {
+        guard let plans = try? await accountService.loadPlans() else { return }
+        proPlan = plans.first(where: { $0.accuracyEnabled })
     }
 
     var canRequestCalendarCreation: Bool {
@@ -223,6 +422,7 @@ final class SnapCalModel {
     }
 
     func importScreenshot(from url: URL) async {
+        processingStage = .preparing
         phase = .processing(fileName: url.lastPathComponent)
 
         do {
@@ -247,6 +447,7 @@ final class SnapCalModel {
     }
 
     func importInMemoryImage(_ image: ClipboardImage) async {
+        processingStage = .preparing
         phase = .processing(fileName: image.fileName)
 
         do {
@@ -276,6 +477,7 @@ final class SnapCalModel {
         locationResolutionIssue = nil
         reminderIssue = nil
         screenshotPreviewData = nil
+        processingStage = .preparing
         phase = .ready
     }
 
@@ -519,10 +721,11 @@ final class SnapCalModel {
     }
 
     private func process(_ image: ValidatedImage) async throws {
-        let lines = try await ocrService.recognizeText(in: image.cgImage)
         let extractedDrafts: [EventDraft]
         switch extractionMode {
         case .localOnly:
+            processingStage = .recognizing
+            let lines = try await ocrService.recognizeText(in: image.cgImage)
             extractedDrafts = try extractor.extractEvents(
                 lines: lines,
                 capturedAt: image.capturedAt,
@@ -530,42 +733,33 @@ final class SnapCalModel {
             )
             extractionNotice = .local
         case .accuracy:
-            let localCandidates = try? extractor.extractEvents(
-                lines: lines,
-                capturedAt: image.capturedAt,
-                sourceFileName: image.fileName
-            )
-            do {
-                let result = try await cloudExtractor.extract(
+            processingStage = .checkingSubscription
+            guard canUseAccuracy else { throw accuracyRequirementError() }
+            if let optimized = cloudExtractor as? any OptimizedCloudEventExtracting {
+                processingStage = .preparing
+                async let preparedImage = optimized.prepare(image: image)
+                processingStage = .recognizing
+                let lines = try await ocrService.recognizeText(in: image.cgImage)
+                let prepared = try await preparedImage
+                extractedDrafts = try await extractAccuracy(
                     image: image,
-                    lines: lines,
-                    capturedAt: image.capturedAt,
-                    sourceFileName: image.fileName
+                    preparedImage: prepared,
+                    optimizedExtractor: optimized,
+                    lines: lines
                 )
-                extractedDrafts = reconcile(
-                    cloud: result.drafts,
-                    local: localCandidates ?? []
-                )
-                extractionNotice = .openRouter(model: result.model)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                guard var localCandidates else { throw error }
-                for index in localCandidates.indices {
-                    localCandidates[index].ambiguities.append(DraftAmbiguity(
-                        field: .extraction,
-                        message: "Accuracy Mode was unavailable. This draft uses on-device extraction only.",
-                        severity: .medium
-                    ))
-                }
-                extractedDrafts = localCandidates
-                extractionNotice = .localFallback(
-                    reason: (error as? LocalizedError)?.errorDescription
-                        ?? "Accuracy Mode was unavailable."
+            } else {
+                processingStage = .recognizing
+                let lines = try await ocrService.recognizeText(in: image.cgImage)
+                extractedDrafts = try await extractAccuracy(
+                    image: image,
+                    preparedImage: nil,
+                    optimizedExtractor: nil,
+                    lines: lines
                 )
             }
         }
 
+        processingStage = .validating
         guard !extractedDrafts.isEmpty else {
             throw DraftExtractionError.noEventDetected
         }
@@ -601,6 +795,89 @@ final class SnapCalModel {
         } else {
             screenshotPreviewData = nil
         }
+    }
+
+    private func extractAccuracy(
+        image: ValidatedImage,
+        preparedImage: PreparedAccuracyImage?,
+        optimizedExtractor: (any OptimizedCloudEventExtracting)?,
+        lines: [RecognizedTextLine]
+    ) async throws -> [EventDraft] {
+        var localCandidates: [EventDraft]?
+        processingStage = .extracting
+        do {
+            let result: CloudExtractionResult
+            if let preparedImage, let optimizedExtractor {
+                async let cloudResult = optimizedExtractor.extract(
+                    preparedImage: preparedImage,
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                localCandidates = try? extractor.extractEvents(
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                result = try await cloudResult
+            } else {
+                async let cloudResult = cloudExtractor.extract(
+                    image: image,
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                localCandidates = try? extractor.extractEvents(
+                    lines: lines,
+                    capturedAt: image.capturedAt,
+                    sourceFileName: image.fileName
+                )
+                result = try await cloudResult
+            }
+            if let quota = result.quota {
+                applyAccuracyQuota(quota)
+            }
+            extractionNotice = .openRouter(model: result.model)
+            return reconcile(cloud: result.drafts, local: localCandidates ?? [])
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard var localCandidates else { throw error }
+            for index in localCandidates.indices {
+                localCandidates[index].ambiguities.append(DraftAmbiguity(
+                    field: .extraction,
+                    message: "Accuracy Mode was unavailable. This draft uses on-device extraction only.",
+                    severity: .medium
+                ))
+            }
+            extractionNotice = .localFallback(
+                reason: (error as? LocalizedError)?.errorDescription
+                    ?? "Accuracy Mode was unavailable."
+            )
+            return localCandidates
+        }
+    }
+
+    private func applyAccuracyQuota(_ quota: AccuracyQuota) {
+        guard let account = accountState.snapshot else { return }
+        accountState = .signedIn(AccountSnapshot(
+            userID: account.userID,
+            email: account.email,
+            invited: account.invited,
+            subscriptionStatus: account.subscriptionStatus,
+            plan: account.plan,
+            quota: quota,
+            paymentWarning: account.paymentWarning
+        ))
+    }
+
+    private func accuracyRequirementError() -> SnapCalAccountError {
+        guard let account = accountState.snapshot else {
+            return .authenticationRequired
+        }
+        if !account.invited { return .invitationRequired }
+        if account.isQuotaExhausted { return .quotaExhausted }
+        return .subscriptionRequired
     }
 
     private func persistCurrentDraft(
@@ -784,5 +1061,26 @@ final class SnapCalModel {
         )
         .lowercased()
         .filter(\.isLetter)
+    }
+
+    private func accountIssue(for error: Error) -> AccountIssue {
+        let accountError = error as? SnapCalAccountError
+        let message = accountError?.errorDescription
+            ?? (error as? LocalizedError)?.errorDescription
+            ?? "SnapCal's hosted service is temporarily unavailable."
+        let title: String
+        switch accountError {
+        case .authenticationRequired:
+            title = "Sign in required"
+        case .invitationRequired:
+            title = "Beta invitation required"
+        case .subscriptionRequired, .quotaExhausted:
+            title = "SnapCal Pro required"
+        case .billingUnavailable:
+            title = "Billing unavailable"
+        default:
+            title = "Account unavailable"
+        }
+        return AccountIssue(title: title, message: message)
     }
 }

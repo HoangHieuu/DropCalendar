@@ -4,6 +4,7 @@ import SwiftUI
 struct SnapCalApp: App {
     @NSApplicationDelegateAdaptor(SnapCalAppDelegate.self) private var appDelegate
     @State private var model = SnapCalModel.live()
+    private let updates = AppUpdateController()
 
     var body: some Scene {
         WindowGroup("SnapCal", id: "main") {
@@ -13,7 +14,7 @@ struct SnapCalApp: App {
         .windowResizability(.contentMinSize)
 
         MenuBarExtra {
-            SnapCalMenuBarView(model: model)
+            SnapCalMenuBarView(model: model, updates: updates)
         } label: {
             Image(systemName: "calendar.badge.plus")
                 .accessibilityLabel("SnapCal")
@@ -22,7 +23,7 @@ struct SnapCalApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            PrivacySettingsView(model: model)
+            SnapCalSettingsView(model: model)
         }
     }
 

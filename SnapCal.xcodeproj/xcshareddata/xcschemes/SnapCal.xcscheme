@@ -14,9 +14,9 @@
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
-   <TestAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv = "YES">
+   <TestAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "" selectedLauncherIdentifier = "Xcode.IDEFoundation.Launcher.PosixSpawn" shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
-         <TestableReference skipped = "NO" parallelizable = "YES">
+         <TestableReference skipped = "NO" parallelizable = "NO">
             <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "T00000000000000000000002" BuildableName = "SnapCalTests.xctest" BlueprintName = "SnapCalTests" ReferencedContainer = "container:SnapCal.xcodeproj"/>
          </TestableReference>
       </Testables>
