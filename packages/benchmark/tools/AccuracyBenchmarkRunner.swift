@@ -42,11 +42,14 @@ private enum AccuracyRunnerError: LocalizedError {
 @main
 private enum AccuracyBenchmarkRunner {
     static func main() async throws {
-        guard CommandLine.arguments.count == 4 else {
+        guard (4...5).contains(CommandLine.arguments.count) else {
             throw AccuracyRunnerError.usage
         }
         let manifestURL = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
         let outputURL = URL(fileURLWithPath: CommandLine.arguments[2]).standardizedFileURL
+        let costOutputURL = CommandLine.arguments.count == 5
+            ? URL(fileURLWithPath: CommandLine.arguments[4]).standardizedFileURL
+            : nil
         guard let endpoint = URL(string: CommandLine.arguments[3]) else {
             throw AccuracyRunnerError.invalidEndpoint
         }
@@ -55,10 +58,11 @@ private enum AccuracyBenchmarkRunner {
         let validator = ImageValidator()
         let ocr = VisionOCRService()
         var output = Data()
+        var costOutput = Data()
 
         for row in rows {
             let started = DispatchTime.now().uptimeNanoseconds
-            let prediction: [String: Any]
+            var prediction: [String: Any]
             do {
                 let capturedAt = try parseCaptureTime(row.capturedAt, itemID: row.id)
                 guard let timeZone = TimeZone(identifier: row.timezone) else {
@@ -84,6 +88,14 @@ private enum AccuracyBenchmarkRunner {
                     timeZone: timeZone,
                     latencyMilliseconds: elapsedMilliseconds(since: started)
                 )
+                if costOutputURL != nil {
+                    costOutput.append(try costRecord(
+                        itemID: row.id,
+                        cost: result.providerCostUSD,
+                        latencyMilliseconds: elapsedMilliseconds(since: started),
+                        succeeded: true
+                    ))
+                }
             } catch CloudExtractionError.benchmarkBudgetExhausted {
                 throw AccuracyRunnerError.benchmarkAborted(
                     row.id,
@@ -105,6 +117,14 @@ private enum AccuracyBenchmarkRunner {
                     error: error,
                     latencyMilliseconds: elapsedMilliseconds(since: started)
                 )
+                if costOutputURL != nil {
+                    costOutput.append(try costRecord(
+                        itemID: row.id,
+                        cost: nil,
+                        latencyMilliseconds: elapsedMilliseconds(since: started),
+                        succeeded: false
+                    ))
+                }
             }
             output.append(try JSONSerialization.data(
                 withJSONObject: prediction,
@@ -118,7 +138,33 @@ private enum AccuracyBenchmarkRunner {
             withIntermediateDirectories: true
         )
         try output.write(to: outputURL, options: .atomic)
+        if let costOutputURL {
+            try FileManager.default.createDirectory(
+                at: costOutputURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try costOutput.write(to: costOutputURL, options: .atomic)
+        }
         print("Accuracy Mode benchmark wrote \(rows.count) redacted predictions to \(outputURL.path)")
+    }
+
+    private static func costRecord(
+        itemID: String,
+        cost: Double?,
+        latencyMilliseconds: Double,
+        succeeded: Bool
+    ) throws -> Data {
+        var data = try JSONSerialization.data(
+            withJSONObject: [
+                "item_id": itemID,
+                "request_cost_usd": (cost as Any?) ?? NSNull(),
+                "latency_ms": latencyMilliseconds,
+                "succeeded": succeeded,
+            ],
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        )
+        data.append(0x0A)
+        return data
     }
 
     private static func loadManifest(_ url: URL) throws -> [AccuracyManifestRow] {

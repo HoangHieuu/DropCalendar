@@ -8,6 +8,7 @@ runs_dir="${SNAPCAL_BENCHMARK_RUNS_DIR:-${repo_root}/packages/benchmark/runs}"
 report_dir="${SNAPCAL_BENCHMARK_REPORT_DIR:-${repo_root}/.build/benchmark}"
 predictions="${runs_dir}/accuracy.jsonl"
 runner="${build_root}/SnapCalAccuracyBenchmarkRunner"
+cost_records="${SNAPCAL_BENCHMARK_COST_RECORDS:-}"
 python_bin="${SNAPCAL_BENCHMARK_PYTHON:-${repo_root}/.venv/bin/python}"
 budget_usd="${SNAPCAL_BENCHMARK_BUDGET_USD:-5.00}"
 manage_service="${SNAPCAL_BENCHMARK_MANAGE_SERVICE:-1}"
@@ -107,19 +108,25 @@ swiftc -parse-as-library \
   -o "${runner}" \
   "${repo_root}/apps/macos/SnapCal/Domain/TrustPolicies.swift" \
   "${repo_root}/apps/macos/SnapCal/Domain/EventDraft.swift" \
+  "${repo_root}/apps/macos/SnapCal/Domain/Account.swift" \
   "${repo_root}/apps/macos/SnapCal/Domain/ExtractionMode.swift" \
   "${repo_root}/apps/macos/SnapCal/Domain/CalendarEvent.swift" \
   "${repo_root}/apps/macos/SnapCal/Infrastructure/ClipboardImageReader.swift" \
   "${repo_root}/apps/macos/SnapCal/Infrastructure/ImageValidator.swift" \
   "${repo_root}/apps/macos/SnapCal/Infrastructure/VisionOCRService.swift" \
   "${repo_root}/apps/macos/SnapCal/Infrastructure/HTTPTransport.swift" \
+  "${repo_root}/apps/macos/SnapCal/Infrastructure/AccuracyImagePreprocessor.swift" \
   "${repo_root}/apps/macos/SnapCal/Infrastructure/GeminiExtractionClient.swift" \
   "${repo_root}/packages/benchmark/tools/AccuracyBenchmarkRunner.swift" \
   -framework AppKit \
   -framework Vision
 
 set +e
-"${runner}" "${manifest}" "${predictions}" "${base_url%/}/v1/benchmark/extract"
+runner_arguments=("${manifest}" "${predictions}" "${base_url%/}/v1/benchmark/extract")
+if [[ -n "${cost_records}" ]]; then
+  runner_arguments+=("${cost_records}")
+fi
+"${runner}" "${runner_arguments[@]}"
 runner_exit=$?
 set -e
 
