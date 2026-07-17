@@ -14,6 +14,7 @@ from app.main import create_app
 from app.oauth_broker import OAuthBrokerUnavailableError, OAuthClientMismatchError
 from app.provider import (
     InvalidProviderOutputError,
+    ProviderAccounting,
     ProviderExtractionResult,
     ProviderKeyStatus,
     ProviderUnavailableError,
@@ -124,6 +125,33 @@ class FakeBenchmarkProvider:
 
     async def key_status(self) -> ProviderKeyStatus:
         return self.key
+
+
+@dataclass
+class InvalidBenchmarkProvider:
+    model: str = "google/gemini-3.1-flash-lite"
+    ready: bool = True
+
+    async def extract(self, request: ExtractionRequest) -> list[EventProposal]:
+        return [valid_proposal()]
+
+    async def extract_with_usage(
+        self, request: ExtractionRequest
+    ) -> ProviderExtractionResult:
+        raise InvalidProviderOutputError(
+            "invalid event proposal",
+            accounting=ProviderAccounting(
+                request_cost_usd=Decimal("0.0042"),
+                generation_id="invalid-generation",
+            ),
+        )
+
+    async def key_status(self) -> ProviderKeyStatus:
+        return ProviderKeyStatus(
+            limit_usd=Decimal("5"),
+            limit_remaining_usd=Decimal("5"),
+            limit_reset=None,
+        )
 
 
 @dataclass
@@ -247,6 +275,24 @@ def test_benchmark_preflight_and_extract_report_cumulative_cost() -> None:
     }
     assert second.json()["usage"]["cumulative_cost_usd"] == 0.03
     assert second.json()["usage"]["budget_remaining_usd"] == 0.02
+
+
+def test_benchmark_records_cost_for_invalid_paid_output() -> None:
+    client = TestClient(
+        create_app(InvalidBenchmarkProvider(), benchmark_budget=BenchmarkBudget("0.05"))
+    )
+
+    response = client.post("/v1/benchmark/extract", json=valid_payload())
+    status = client.get("/v1/benchmark/status")
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "invalid_provider_output"
+    assert status.json()["usage"] == {
+        "request_cost_usd": 0.0,
+        "cumulative_cost_usd": 0.0042,
+        "budget_remaining_usd": 0.0458,
+        "request_count": 1,
+    }
 
 
 def test_benchmark_refuses_requests_after_budget_is_exhausted() -> None:

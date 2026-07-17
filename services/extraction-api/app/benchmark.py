@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from .contracts import ExtractionRequest
 from .provider import (
     BenchmarkExtractionProvider,
+    InvalidProviderOutputError,
     ProviderExtractionResult,
     ProviderKeyStatus,
     ProviderUsageUnavailableError,
@@ -79,7 +80,18 @@ class BenchmarkBudget:
             if self._cumulative_cost_usd >= self.ceiling_usd:
                 raise BenchmarkBudgetExceededError("benchmark budget is exhausted")
 
-            result = await provider.extract_with_usage(request)
+            try:
+                result = await provider.extract_with_usage(request)
+            except InvalidProviderOutputError as error:
+                accounting = error.accounting
+                request_cost = accounting.request_cost_usd if accounting else None
+                if request_cost is None:
+                    raise ProviderUsageUnavailableError(
+                        "invalid benchmark output omitted request cost",
+                        accounting=accounting,
+                    ) from error
+                self._record_cost(request_cost)
+                raise
             if (
                 not result.request_cost_usd.is_finite()
                 or result.request_cost_usd < 0
@@ -87,13 +99,7 @@ class BenchmarkBudget:
                 raise ProviderUsageUnavailableError(
                     "benchmark provider returned an invalid request cost"
                 )
-            self._request_count += 1
-            self._cumulative_cost_usd += result.request_cost_usd
-            usage = self._usage_snapshot(result.request_cost_usd)
-            if self._cumulative_cost_usd > self.ceiling_usd:
-                raise BenchmarkBudgetExceededError(
-                    "benchmark request exceeded the remaining process budget"
-                )
+            usage = self._record_cost(result.request_cost_usd)
             return result, usage
 
     async def status(self) -> BenchmarkUsageSnapshot:
@@ -146,3 +152,17 @@ class BenchmarkBudget:
             budget_remaining_usd=remaining,
             request_count=self._request_count,
         )
+
+    def _record_cost(self, request_cost_usd: Decimal) -> BenchmarkUsageSnapshot:
+        if not request_cost_usd.is_finite() or request_cost_usd < 0:
+            raise ProviderUsageUnavailableError(
+                "benchmark provider returned an invalid request cost"
+            )
+        self._request_count += 1
+        self._cumulative_cost_usd += request_cost_usd
+        usage = self._usage_snapshot(request_cost_usd)
+        if self._cumulative_cost_usd > self.ceiling_usd:
+            raise BenchmarkBudgetExceededError(
+                "benchmark request exceeded the remaining process budget"
+            )
+        return usage

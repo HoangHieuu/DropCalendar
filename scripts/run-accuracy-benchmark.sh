@@ -149,15 +149,18 @@ if [[ "${runner_exit}" -ne 0 ]]; then
 fi
 
 set +e
-score_gate_args=()
-if [[ "${profile}" != "calibration" ]]; then
-  score_gate_args+=(--enforce-gates)
+if [[ "${profile}" == "calibration" ]]; then
+  "${repo_root}/scripts/run-benchmark.sh" score \
+    --mode accuracy \
+    "${validation_args[@]}" \
+    "$@"
+else
+  "${repo_root}/scripts/run-benchmark.sh" score \
+    --mode accuracy \
+    "${validation_args[@]}" \
+    --enforce-gates \
+    "$@"
 fi
-"${repo_root}/scripts/run-benchmark.sh" score \
-  --mode accuracy \
-  "${validation_args[@]}" \
-  "${score_gate_args[@]}" \
-  "$@"
 score_exit=$?
 set -e
 

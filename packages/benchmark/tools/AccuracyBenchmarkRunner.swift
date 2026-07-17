@@ -205,6 +205,12 @@ private enum AccuracyBenchmarkRunner {
         if draft.title.evidenceText?.isEmpty == false { evidence.append("title") }
         if draft.start.evidenceText?.isEmpty == false { evidence.append("start") }
         if draft.location.evidenceText?.isEmpty == false { evidence.append("location") }
+        let ambiguityFields = draft.ambiguities.reduce(into: [String]()) { fields, ambiguity in
+            let field = ambiguity.field.rawValue
+            if !fields.contains(field) {
+                fields.append(field)
+            }
+        }
         return [
             "schema_version": 1,
             "item_id": itemID,
@@ -216,7 +222,7 @@ private enum AccuracyBenchmarkRunner {
             "is_all_day": draft.isAllDay,
             "location": draft.location.value ?? NSNull(),
             "evidence_fields": evidence,
-            "ambiguity_fields": draft.ambiguities.map(\.field.rawValue),
+            "ambiguity_fields": ambiguityFields,
             "latency_ms": latencyMilliseconds,
             "failure_reason": NSNull(),
         ]

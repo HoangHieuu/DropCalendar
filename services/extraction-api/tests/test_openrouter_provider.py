@@ -107,6 +107,11 @@ def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_sch
     body = captured["body"]
     assert isinstance(body, dict)
     assert body["messages"][0]["role"] == "system"
+    assert "weekday expressions" in body["messages"][0]["content"]
+    assert (
+        "registration deadline is not an event start"
+        in body["messages"][0]["content"]
+    )
     content = body["messages"][1]["content"]
     assert captured["authorization"] == "Bearer test-openrouter-key"
     assert captured["referer"] == "https://snapcal.example"
@@ -117,15 +122,19 @@ def test_openrouter_request_keeps_key_server_side_and_uses_strict_multimodal_sch
     assert body["response_format"]["type"] == "json_schema"
     assert body["response_format"]["json_schema"]["strict"] is True
     event_array = body["response_format"]["json_schema"]["schema"]["properties"]["events"]
-    assert event_array["minItems"] == 1
-    assert event_array["maxItems"] == 10
+    assert "minItems" not in event_array
+    assert "maxItems" not in event_array
+    start_schema = event_array["items"]["properties"]["start"]
+    assert start_schema["properties"]["date"] == {"type": "string"}
+    assert start_schema["properties"]["evidence_text"] == {"type": "string"}
     assert body["provider"]["require_parameters"] is True
     assert body["provider"]["allow_fallbacks"] is True
     assert body["provider"]["data_collection"] == "deny"
     assert body["provider"]["zdr"] is True
+    assert body["provider"]["sort"] == "throughput"
     assert body["provider"]["max_price"] == {"prompt": 0.30, "completion": 1.80}
     assert body["usage"] == {"include": True}
-    assert body["max_completion_tokens"] == 2_500
+    assert body["max_tokens"] == 2_500
     assert len(result) == 1
     assert result[0].title.value == "Agentic AI Build Week"
 
@@ -174,6 +183,27 @@ def test_openrouter_rejects_empty_multiple_event_proposal() -> None:
             lambda _: httpx.Response(
                 200,
                 json={"choices": [{"message": {"content": '{"events":[]}'}}]},
+            )
+        ),
+    )
+
+    with pytest.raises(InvalidProviderOutputError):
+        asyncio.run(provider.extract(extraction_request()))
+
+
+def test_openrouter_rejects_more_than_ten_event_proposals() -> None:
+    event = json.loads(proposal_json())["events"][0]
+    provider = OpenRouterProvider(
+        api_key="test-key",
+        model="google/gemini-3.1-flash-lite",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": json.dumps({"events": [event] * 11})}}
+                    ]
+                },
             )
         ),
     )

@@ -15,8 +15,8 @@ if [[ "${SNAPCAL_BENCHMARK_ALLOW_CLOUD:-0}" != "1" ]]; then
 fi
 
 mkdir -p "${work_dir}"
-rm -f "${work_dir}/images"
-ln -s "${repo_root}/packages/benchmark/corpus/images" "${work_dir}/images"
+rm -rf "${work_dir}/images"
+cp -R "${repo_root}/packages/benchmark/corpus/images" "${work_dir}/images"
 sed -n '1,20p' "${repo_root}/packages/benchmark/corpus/manifest.jsonl" >"${manifest}"
 
 SNAPCAL_BENCHMARK_PROFILE=calibration \

@@ -381,14 +381,14 @@ class OpenRouterProvider:
                 "require_parameters": True,
                 "data_collection": "deny",
                 "zdr": True,
-                "sort": "latency",
+                "sort": "throughput",
                 "max_price": {"prompt": 0.30, "completion": 1.80},
             },
             "usage": {"include": True},
             "reasoning": {"effort": "minimal"},
             "stream": False,
             "temperature": 0,
-            "max_completion_tokens": 2_500,
+            "max_tokens": 2_500,
         }
 
 
@@ -419,6 +419,11 @@ Safety rules:
 - Return a separate event only when independently actionable with its own visible date evidence.
 - Do not split agendas, sponsor lists, or numbered prose without distinct event evidence.
 - Never invent a date or time; every proposed date/time cites visible evidence_text.
+- Resolve relative dates and weekday expressions such as today, tomorrow, T7,
+  and Thứ 7 from captured_at in the user's timezone; preserve the expression as
+  evidence_text and mark the resolved value as inferred.
+- A registration deadline is not an event start. Prefer the explicit event start,
+  keep the deadline in the description, and do not emit it as a separate event.
 - A date without a clock time is all-day. Morning/evening/sáng/tối are not clock times.
 - Date-range ends are inclusive from the user's perspective.
 - Preserve Vietnamese and English faithfully.
@@ -469,11 +474,19 @@ def _event_response_schema() -> dict[str, Any]:
         "required": ["date", "time", "evidence_text", "confidence", "is_inferred"],
         "additionalProperties": False,
     }
+    start_temporal = {
+        **temporal,
+        "properties": {
+            **temporal["properties"],
+            "date": {"type": "string"},
+            "evidence_text": {"type": "string"},
+        },
+    }
     event = {
         "type": "object",
         "properties": {
             "title": evidence_string,
-            "start": temporal,
+            "start": start_temporal,
             "end": temporal,
             "location": evidence_string,
             "description": evidence_string,
@@ -509,14 +522,14 @@ def _event_response_schema() -> dict[str, Any]:
         ],
         "additionalProperties": False,
     }
+    # Gemini rejects this nested schema when array cardinality keywords are
+    # included. EventProposalSet still enforces the required one-to-ten range.
     return {
         "type": "object",
         "properties": {
             "events": {
                 "type": "array",
                 "items": event,
-                "minItems": 1,
-                "maxItems": 10,
             }
         },
         "required": ["events"],
