@@ -10,7 +10,7 @@ missing or ambiguous rather than silently corrected.
 
 | Layer | Cases |
 | --- | --- |
-| Unit | Tomorrow/today; weekday context/conflict; show-start preference; deadline ranking; `20:OO` confidence gate; specific location ranking |
+| Unit | Tomorrow/today; numeric and word-form weekday context/conflict; Vietnamese word-form dates; show-start preference; deadline ranking; `20:OO` confidence gate; specific location ranking |
 | Integration | Local Only model path makes zero cloud calls and preserves evidence/ambiguity state |
 | E2E | Synthetic semantic benchmark fixtures produce a redacted Local Only report |
 | Platform | Import disclosure clearly identifies deterministic limitations |
@@ -20,6 +20,8 @@ missing or ambiguous rather than silently corrected.
 ## Fixtures
 
 - Vietnamese and English relative-date lines.
+- `02:00 AM (2 giờ sáng) thứ Bảy, ngày 18 tháng 7 tại Việt Nam.`
+- Vietnamese numeric and word-form weekday lines.
 - Door-time plus event-start line.
 - Registration deadline plus event-date lines.
 - Weekday/date agreement and conflict.
@@ -37,12 +39,14 @@ scripts/run-local-benchmark.sh
 
 ## Acceptance Evidence
 
-- Twelve `LocalEventExtractorTests` cover the named deterministic semantic
-  rules and negative cases with fixed capture time/timezone evidence.
+- Sixteen `LocalEventExtractorTests` cover the named deterministic semantic
+  rules and negative cases with fixed capture time/timezone evidence, including
+  the exact Vietnamese word-date OCR regression.
 - `SnapCalModelTests.testLocalOnlyNeverCallsCloudExtractor` proves the Local
   Only application path makes zero cloud calls.
 - Native inspection shows Local Only explicitly described as Apple Vision OCR
   plus deterministic rules, not a language model.
 - The production-source Local Only runner completed all 100 generated fixtures
-  with zero critical wrong values and about 137 ms median latency. This is
-  synthetic regression evidence only.
+  with passing quality gates. The 2026-07-16 macOS unit target passed 111 tests
+  with one expected team-signing-dependent Keychain skip. This is synthetic
+  regression evidence only.

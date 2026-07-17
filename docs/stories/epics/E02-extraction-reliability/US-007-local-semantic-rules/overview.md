@@ -17,9 +17,10 @@ source label.
 Local Only is explicitly described as OCR plus deterministic rules with limited
 semantic understanding. It handles common Vietnamese-English intent cues such
 as tomorrow/today, event-start versus door time, registration deadlines versus
-event dates, weekday conflicts, high-confidence `OO` time corrections, and
-specific locations versus generic platform labels. Unresolved conflicts remain
-visible ambiguities and Local Only never calls a cloud service.
+event dates, weekday conflicts, high-confidence `OO` time corrections,
+Vietnamese word-form dates and weekdays, and specific locations versus generic
+platform labels. Unresolved conflicts remain visible ambiguities and Local Only
+never calls a cloud service.
 
 ## Affected Users
 

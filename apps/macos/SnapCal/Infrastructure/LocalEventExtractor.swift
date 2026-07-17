@@ -592,6 +592,22 @@ struct LocalEventExtractor: EventExtracting {
         }
 
         if let groups = captures(
+            #"\bngay\s+([0-3]?\d)\s+thang\s+([01]?\d)(?:\s+(?:nam\s+)?(\d{2,4}))?\b"#,
+            in: foldedText(line.text)
+        ),
+           let day = integer(groups[safe: 1]),
+           let month = integer(groups[safe: 2]),
+           (1...31).contains(day),
+           (1...12).contains(month) {
+            return DateEvidence(
+                day: day,
+                month: month,
+                year: integer(groups[safe: 3]),
+                line: line
+            )
+        }
+
+        if let groups = captures(
             #"\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+([0-3]?\d)(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b"#,
             in: line.text
         ),
@@ -757,12 +773,12 @@ struct LocalEventExtractor: EventExtracting {
         let folded = foldedText(line.text)
         let patterns: [(String, Int)] = [
             (#"\b(sunday|chu\s*nhat|cn)\b"#, 1),
-            (#"\b(monday|thu\s*2|t2)\b"#, 2),
-            (#"\b(tuesday|thu\s*3|t3)\b"#, 3),
-            (#"\b(wednesday|thu\s*4|t4)\b"#, 4),
-            (#"\b(thursday|thu\s*5|t5)\b"#, 5),
-            (#"\b(friday|thu\s*6|t6)\b"#, 6),
-            (#"\b(saturday|thu\s*7|t7)\b"#, 7),
+            (#"\b(monday|thu\s*(?:2|hai)|t2)\b"#, 2),
+            (#"\b(tuesday|thu\s*(?:3|ba)|t3)\b"#, 3),
+            (#"\b(wednesday|thu\s*(?:4|tu)|t4)\b"#, 4),
+            (#"\b(thursday|thu\s*(?:5|nam)|t5)\b"#, 5),
+            (#"\b(friday|thu\s*(?:6|sau)|t6)\b"#, 6),
+            (#"\b(saturday|thu\s*(?:7|bay)|t7)\b"#, 7),
         ]
         return patterns.first(where: {
             folded.range(of: $0.0, options: .regularExpression) != nil

@@ -36,6 +36,32 @@ final class LocalEventExtractorTests: XCTestCase {
         XCTAssertEqual(components.minute, 0)
     }
 
+    func testExtractsVietnameseWordFormDateAndAMTime() throws {
+        let extractor = LocalEventExtractor(calendar: calendar)
+        let evidence = "02:00 AM (2 giờ sáng) thứ Bảy, ngày 18 tháng 7 tại Việt Nam."
+        let draft = try extractor.extract(
+            lines: [
+                RecognizedTextLine(text: "Lịch phát sóng", confidence: 0.97),
+                RecognizedTextLine(text: evidence, confidence: 0.95),
+            ],
+            capturedAt: makeDate(year: 2026, month: 7, day: 16, hour: 21),
+            sourceFileName: "vietnamese-word-date.png"
+        )
+
+        let start = try XCTUnwrap(draft.start.value)
+        let components = calendar.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: start
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 7)
+        XCTAssertEqual(components.day, 18)
+        XCTAssertEqual(components.hour, 2)
+        XCTAssertEqual(components.minute, 0)
+        XCTAssertEqual(draft.start.evidenceText, evidence)
+        XCTAssertTrue(draft.start.isInferred)
+    }
+
     func testExtractsEnglishMonthDateAndPMTime() throws {
         let extractor = LocalEventExtractor(calendar: calendar)
         let draft = try extractor.extract(
@@ -161,6 +187,29 @@ final class LocalEventExtractorTests: XCTestCase {
         XCTAssertEqual(components.month, 7)
         XCTAssertEqual(components.day, 18)
         XCTAssertEqual(components.hour, 20)
+    }
+
+    func testResolvesVietnameseWordWeekdayOnlyInTimeContext() throws {
+        let extractor = LocalEventExtractor(calendar: calendar)
+        let draft = try extractor.extract(
+            lines: [
+                RecognizedTextLine(text: "Sinh hoạt cộng đồng", confidence: 0.96),
+                RecognizedTextLine(text: "thứ Bảy lúc 02:00 AM", confidence: 0.94),
+            ],
+            capturedAt: makeDate(year: 2026, month: 7, day: 16, hour: 21),
+            sourceFileName: "saturday-word.png"
+        )
+
+        let components = calendar.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: try XCTUnwrap(draft.start.value)
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 7)
+        XCTAssertEqual(components.day, 18)
+        XCTAssertEqual(components.hour, 2)
+        XCTAssertEqual(components.minute, 0)
+        XCTAssertTrue(draft.start.isInferred)
     }
 
     func testPrefersShowStartOverDoorsOpenTime() throws {

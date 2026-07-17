@@ -4,7 +4,10 @@ Date: 2026-07-14
 
 ## Status
 
-Accepted
+Superseded by decision 0026
+
+This record preserves the 2026-07-14 environment and decision history. Decision
+0026 contains the current product contract and toolchain state.
 
 ## Context
 
