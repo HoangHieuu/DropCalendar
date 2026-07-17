@@ -7,9 +7,12 @@
 - Keep local drafts secure and allow users to delete history.
 - Do not log image bytes, full OCR text, OAuth tokens, or private event content.
 - Disclose when images or OCR text are sent to cloud OCR or AI providers.
-- Local-only mode must prevent cloud calls and explain reduced accuracy.
-- Local Only copy must identify Apple Vision OCR plus deterministic rules and
-  must not imply on-device LLM-level semantic understanding.
+- Local Semantic must make zero app-initiated account, backend, billing,
+  database, OpenRouter, or other cloud calls.
+- Local Semantic remains selected when its system model is unavailable or fails,
+  but import and review copy must truthfully identify whether the Apple
+  on-device model or deterministic fallback produced the draft.
+- Deterministic fallback copy must not imply that a language model ran.
 - Accuracy Mode is opt-in at import time and discloses that the image and OCR
   are sent through the SnapCal service to OpenRouter and its selected model
   provider.
@@ -32,6 +35,11 @@
   copies, and the vault key. It does not delete user originals or Google
   Calendar events.
 
+The responsive visual redesign is presentation-only. Its procedural paper,
+ink, and motif layers are decorative, hidden from accessibility, and do not
+capture, persist, transmit, or log screenshot/OCR/event content. The supplied
+reference image is visual direction only and is not bundled.
+
 Retention and deletion are product behavior, not cleanup conveniences. Any
 implementation story that persists images, provider payloads, OCR text, or
 calendar credentials is high-risk and requires explicit storage, encryption,
@@ -53,13 +61,18 @@ private data. Metrics run separately for Vietnamese and English.
 
 The checked-in version-1 corpus currently contains 100 project-generated,
 sanitized, redistributable fixtures and supports synthetic regression claims
-only. Local Only runs the production Apple Vision and deterministic extractor
-sources. Accuracy Mode has a separate production-source runner that requires
-an explicit cloud/cost opt-in. Licensed real-world acceptance still requires a
-non-synthetic corpus and complete Local Only and Accuracy reports. That work is
+only. The existing legacy Local Only runner exercises the production Apple
+Vision and deterministic extractor sources and remains the deterministic
+fallback baseline. Accuracy Mode has a separate production-source runner that
+requires an explicit cloud/cost opt-in. Licensed real-world acceptance still
+requires a non-synthetic corpus and complete Local Semantic and Accuracy
+reports. Local Semantic reports must separate Foundation Models from
+deterministic-fallback execution. The benchmark prediction schema does not yet
+carry that provenance, so semantic acceptance remains open. This work is
 deferred and is not an invited paid-beta release blocker because current
-quality was accepted. It remains mandatory before a public benchmark claim or
-a major provider/prompt/parser change that could invalidate accepted quality.
+deterministic and Accuracy quality was accepted. It remains mandatory before a
+public semantic-quality claim or a major model/provider/prompt/parser change
+that could invalidate accepted quality.
 
 Real-world acceptance uses manifest version 2 in an owner-controlled directory
 outside Git. Each item must be non-synthetic, hash-verified, sanitized,

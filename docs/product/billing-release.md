@@ -2,8 +2,9 @@
 
 ## Plans
 
-Local Only is anonymous, unlimited, and entirely on-device. It must work with
-no account, subscription, backend, database, or provider availability.
+Local Semantic is anonymous, unlimited, and entirely on-device. It must work
+with no account, subscription, backend, database, or provider availability by
+using the deterministic fallback whenever the system model cannot run.
 
 Pro Beta costs US$4.99 per monthly billing period and grants 100 successful
 Accuracy screenshot imports. One screenshot consumes one unit even when the
@@ -51,12 +52,12 @@ entitlement path.
 
 ## Account UX
 
-- Signed out: explain that Local Only stays free and offer Google sign-in.
+- Signed out: explain that Local Semantic stays free and offer Google sign-in.
 - Signed-in Free: show Pro Beta price, 100-import benefit, disclosure, and
   Subscribe when invited.
 - Active or trialing: show quota remaining and period end.
 - Past due: retain Accuracy temporarily and show Manage Billing.
-- Exhausted: disable Accuracy until reset while Local Only remains available.
+- Exhausted: disable Accuracy until reset while Local Semantic remains available.
 - Paused or canceled: disable Accuracy and direct the user to Manage Billing.
 - Always expose Restore/Refresh Purchase, Sign Out of SnapCal, and Disconnect
   Google Calendar.

@@ -3,9 +3,14 @@
 ## Current State
 
 The repository contains a macOS 14 SwiftUI menu-bar app, XCTest target, a
-versioned benchmark package, and a FastAPI modular monolith. Local Only keeps
-extraction on-device. During development, Accuracy Mode can use the preserved
-loopback `/v1` contract. The production `/v2` contract accepts a bounded
+versioned benchmark package, and a FastAPI modular monolith. The app exposes
+exactly two extraction modes. Local Semantic keeps extraction on-device,
+always produces a deterministic Apple Vision candidate, and conditionally asks
+Apple's system language model for a guided proposal before deterministic
+reconciliation. An unavailable, unsupported, failed, or invalid system-model
+path keeps Local Semantic selected and uses the deterministic candidate with
+truthful source disclosure. During development, Accuracy Mode can use the
+preserved loopback `/v1` contract. The production `/v2` contract accepts a bounded
 multipart JPEG plus layout-aware Apple Vision OCR, authenticates an invited
 SnapCal device session, atomically reserves quota in PostgreSQL, and calls
 OpenRouter with strict structured output from
@@ -56,8 +61,12 @@ The initial implementation target is macOS-first:
 ```text
 SwiftUI manual image import and review
   -> Apple Vision local OCR
-  -> Local Only deterministic extraction
-     or opt-in loopback FastAPI -> OpenRouter -> Gemini 3.1 Flash Lite
+  -> deterministic local candidate
+  -> Local Semantic
+       -> optional Foundation Models proposal when available
+       -> evidence reconciliation and deterministic validation
+       -> deterministic fallback with source disclosure on any semantic failure
+     or explicitly opted-in FastAPI -> OpenRouter -> Gemini 3.1 Flash Lite
   -> typed one-or-more event-draft result
   -> one-at-a-time editable review plus minimized local draft persistence
   -> reminder suggestions, local duplicate warnings, and optional explicit
@@ -90,8 +99,8 @@ Paddle's signed, deduplicated webhooks own the local subscription cache.
 Browser redirects and locally cached UI state never grant Accuracy access. The
 successful extraction hot path uses exactly two database transactions and
 never queries Paddle or OpenRouter for entitlement. A screenshot consumes one
-unit even when it contains multiple events; failure and Local Only fallback
-consume none.
+unit even when it contains multiple events; failure and deterministic
+on-device fallback consume none.
 
 The backend never creates Calendar events. Calendar access and refresh tokens
 remain in the app's Keychain. A production client sends a refresh token only
@@ -176,11 +185,15 @@ untrusted image
   -> validation and metadata
   -> local OCR
   -> deterministic local candidate with layout boxes
-  -> Local Only returns the local candidate, or
-  -> Accuracy Mode sends bounded JPEG + OCR to loopback `/v1` in development
-     or authenticated hosted `/v2` in production
-  -> FastAPI calls OpenRouter Chat Completions with a strict JSON Schema
-  -> strict versioned one-to-ten proposal validation and local/cloud disagreement checks
+  -> Local Semantic:
+       -> when available, SystemLanguageModel proposes one-to-ten typed events
+       -> validate OCR evidence and reconcile with the deterministic candidate
+       -> otherwise return the deterministic candidate and record fallback
+     or Accuracy Mode:
+       -> send bounded JPEG + OCR to loopback `/v1` in development
+          or authenticated hosted `/v2` in production
+       -> FastAPI calls OpenRouter Chat Completions with a strict JSON Schema
+       -> validate one-to-ten proposals and local/cloud disagreement
   -> normalization and deterministic consistency checks
   -> confidence and ambiguity rules
   -> ordered typed drafts
@@ -190,12 +203,19 @@ untrusted image
 Cloud OCR remains future infrastructure. The OpenRouter adapter enters through
 the inward-facing cloud-extraction protocol and its model remains configurable.
 
-An optional Local Semantic Mode is architecture-approved but toolchain-gated by
-decision 0016. The current macOS 15.5 SDK cannot import Apple's Foundation
-Models framework, so deterministic Local Only remains the only on-device mode.
-A future adapter must preserve macOS 14 compatibility, check system-model
-availability, fall back only to deterministic Local Only, and pass separate
-benchmark gates before becoming user-visible.
+Decision 0026 makes Local Semantic one always-visible privacy choice backed by
+two internal execution paths. The Foundation Models adapter is conditionally
+compiled and guarded by macOS, locale, model-availability, and release checks;
+the deterministic extractor supports macOS 14 and remains the safety fallback.
+The selected mode does not change when fallback occurs, but persisted and
+reviewed provenance must identify the actual engine. No Local Semantic path can
+call Accuracy automatically.
+
+The benchmark currently recognizes the legacy deterministic `local_only` and
+cloud `accuracy` cohorts but does not encode Local Semantic execution
+provenance. A schema that separates Foundation Models and deterministic fallback
+is still required before semantic activation or quality claims can pass their
+benchmark gate.
 
 Models propose fields; deterministic code validates dates, timezones, reminder
 limits, and state transitions. Provider confidence is evidence, not authority.
@@ -249,7 +269,8 @@ retention records and operational logs remain separate concerns.
 
 1. Pure unit tests for Vietnamese-English normalization, date/time/timezone,
    duration, reminders, duplicate signals, and state transitions.
-2. Contract tests for provider adapters and strict payload parsing.
+2. Contract tests for Foundation Models and cloud adapters, strict payload
+   parsing, evidence reconciliation, and deterministic fallback.
 3. Integration tests for local persistence and calendar failure/retry behavior.
 4. Xcode/Simulator or macOS platform tests for import, review, and UI state.
 5. PostgreSQL-backed contract tests for session rotation, Paddle ordering,
@@ -268,3 +289,5 @@ retention records and operational logs remain separate concerns.
   Neon scale-to-zero, or eventually adding a cache. The default remains no.
 - Real-world benchmark licensing and sanitation if accuracy claims are resumed;
   it is not a paid-beta blocker.
+- Local Semantic benchmark provenance schema and separate Vietnamese, English,
+  and mixed-language system-model evidence before production activation.

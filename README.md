@@ -20,9 +20,15 @@ The macOS vertical slice, guarded Google Calendar boundary, and opt-in OpenRoute
 Accuracy Mode are implemented. `SnapCal.xcodeproj` validates a selected PNG,
 JPEG, or HEIC, runs Vietnamese-English Apple Vision OCR, derives an
 evidence-bearing typed draft, presents an editable review, and creates a Google
-Calendar event only after a separate confirmation dialog. Local Only is the
-default and makes no cloud extraction call. Accuracy Mode sends the image and
-layout-aware OCR to a loopback FastAPI proxy, which keeps the OpenRouter
+Calendar event only after a separate confirmation dialog. The app exposes
+exactly two extraction choices: Local Semantic and Accuracy Mode. Local Semantic
+is the default and makes no cloud extraction call. It always builds a
+deterministic Apple Vision OCR candidate, then uses Apple's on-device system
+language model when the compiled framework, runtime, locale, and model state
+allow it. Any unavailable, unsupported, failed, or invalid semantic result keeps
+Local Semantic selected and returns the deterministic candidate; import and
+review disclose which local engine produced the draft. Accuracy Mode sends the
+image and layout-aware OCR to a loopback FastAPI proxy, which keeps the OpenRouter
 credential out of the app and validates strict structured output from
 `google/gemini-3.1-flash-lite`. A menu-bar item and clipboard action feed the
 same review flow. Minimized recent drafts persist in owner-only SQLite without
@@ -58,10 +64,11 @@ decisions are the living contract for ongoing work.
 ## Open And Run
 
 Open `SnapCal.xcodeproj` in Xcode, select the `SnapCal` scheme and **My Mac**, then
-press **Run** (`Command-R`). The deployment target is macOS 14.0. Local Only
-extraction requires no package installation or API key. A Google account listed
-as an OAuth test user is required for the live Calendar flow. Calendar creation
-also requires the local service described below. The downloaded desktop
+press **Run** (`Command-R`). The deployment target is macOS 14.0. Local Semantic
+requires no package installation or API key and automatically uses the
+deterministic fallback when the system model is unavailable. A Google account
+listed as an OAuth test user is required for the live Calendar flow. Calendar
+creation also requires the local service described below. The downloaded desktop
 credential JSON stays outside this repository; the app embeds only its public
 OAuth client ID and never embeds or reads the client secret.
 
@@ -197,7 +204,10 @@ and do not initialize or mutate Harness state.
 
 There is no production backend deployment, server database, mobile app, or CI
 workflow. The remaining Phase 2 release gate is a licensed, sanitized,
-non-synthetic Vietnamese-English corpus plus complete Local Only and Accuracy
-reports. Accuracy benchmarking requires a funded user-owned OpenRouter key.
+non-synthetic Vietnamese-English corpus plus complete Local Semantic and
+Accuracy reports. Local Semantic results must distinguish the Foundation Models
+and deterministic-fallback execution paths; the benchmark provenance schema
+needed to do that remains open. Accuracy benchmarking requires a funded
+user-owned OpenRouter key.
 Any future live Google Calendar proof remains user-driven because SnapCal must
 never consent or create an event on the user's behalf.

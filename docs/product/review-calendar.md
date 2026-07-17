@@ -4,7 +4,10 @@
 
 The review screen is mandatory. It shows editable title, start date/time or
 all-day selection, end time/duration, calendar, location, description,
-reminders, confidence warnings, inference markers, and source evidence.
+reminders, confidence warnings, inference markers, source evidence, and truthful
+extraction provenance. Local Semantic drafts identify whether Apple's on-device
+system model or the deterministic fallback produced them while retaining the
+same selected mode label.
 
 Create Event is disabled when title or date is missing, or when time is missing
 without an all-day selection. Missing location does not block creation but must
@@ -17,6 +20,11 @@ the user move through the ordered drafts while no confirmation or Calendar
 operation is active. Edits, reminders, duplicate warnings, screenshot preview,
 and Calendar lifecycle belong to the selected draft. Every event requires its
 own confirmation dialog; there is no `Create All` action.
+
+The review presentation adapts between a readable single-column compact layout
+and a wide primary-form-plus-inspector layout. Both arrangements expose the
+same editable fields, evidence, provenance, warnings, reminders, and
+confirmation controls in the same safe review flow.
 
 ## Google Calendar Boundary
 

@@ -66,8 +66,9 @@ The paid macOS beta is release-ready when macOS accepts an image by drag/drop or
 extracts Vietnamese and English event details, opens an editable review,
 highlights uncertainty, creates a Google Calendar event after confirmation,
 adds valid reminders, preserves local drafts, warns on duplicates, retains no
-raw screenshot copy by default, keeps anonymous Local Only independent from
-all hosted services, and enforces webhook-owned Pro access and server-owned
+raw screenshot copy by default, keeps anonymous Local Semantic independent from
+all hosted services regardless of whether it uses the system model or
+deterministic fallback, and enforces webhook-owned Pro access and server-owned
 quota. A licensed real-world benchmark remains future public-quality evidence,
 not a blocker for the invited beta whose current extraction quality was
 explicitly accepted.

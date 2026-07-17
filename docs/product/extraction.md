@@ -21,9 +21,14 @@ and creates no temporary screenshot file.
 image validation and metadata
   -> orientation/crop/compression preprocessing
   -> local OCR
-  -> OCR quality assessment
-  -> optional cloud OCR fallback
-  -> vision-language extraction using image plus OCR text
+  -> deterministic layout-aware candidate
+  -> selected extraction mode:
+       Local Semantic
+         -> when available, guided on-device SystemLanguageModel proposal
+         -> OCR-evidence reconciliation
+         -> otherwise deterministic fallback
+       Accuracy Mode
+         -> explicitly opted-in cloud proposal using image plus OCR text
   -> Vietnamese-English normalization
   -> date/time/timezone and location parsing
   -> field evidence, confidence, and ambiguity assembly
@@ -38,16 +43,28 @@ images are not processed as a batch.
 
 ## Modes
 
-### Local Only
+### Local Semantic
 
-Use Apple Vision OCR, deterministic layout-aware extraction, normalization,
-and review without sending the image or OCR off-device. This is the default.
-Local Only is not a language model: it uses bounded Vietnamese-English rules
-for common date, time, title, and location cues and may miss broader semantic
-context. The import screen must state that limitation and recommend explicit
-Accuracy Mode opt-in when the wording or layout is complex. Local Only splits
-numbered blocks only when at least two blocks each carry independent date
-evidence; otherwise it preserves the existing single-draft fallback.
+Local Semantic is the default and never sends the image or OCR off-device. Apple
+Vision OCR and deterministic layout-aware extraction always produce the safety
+baseline. When the Foundation Models framework is compiled and the OS, locale,
+and system model allow it, `SystemLanguageModel.default` proposes
+one or more typed, evidence-bearing events from bounded OCR text. SnapCal rejects
+unsupported evidence, reconciles the proposal with the baseline, and validates
+critical fields deterministically.
+
+If the semantic framework, runtime, locale, or model is unavailable, or if the
+request fails or returns invalid evidence, SnapCal returns the deterministic
+candidate while keeping Local Semantic selected. Import and review must disclose
+whether the system model or deterministic fallback produced the draft. This
+fallback never calls Accuracy Mode.
+
+The deterministic path uses bounded Vietnamese-English rules for common date,
+time, title, and location cues. It splits numbered blocks only when at least two
+blocks each carry independent date evidence; otherwise it preserves the existing
+single-draft fallback. Its Vietnamese rules include numeric dates, word-form
+dates such as `ngày 18 tháng 7`, and numeric or word-form weekdays such as `T7`
+and `thứ Bảy`.
 
 ### Accuracy Mode
 
@@ -58,12 +75,16 @@ most 2,048 pixels and smaller images are not enlarged. The existing loopback
 `/v1` contract remains for development and calibration. OpenRouter routes
 the request to `google/gemini-3.1-flash-lite`, which proposes one or more strict
 evidence-bearing events in source order. If it is unavailable or invalid, fall
-back visibly to the deterministic local candidates without consuming quota.
+back visibly to the deterministic on-device candidate without consuming quota.
+This is an Accuracy result provenance state, not a third selectable mode.
 Cloud OCR is not part of this slice.
 
 ## Provider Policy
 
 - Apple Vision is the preferred local OCR pre-pass on macOS/iOS.
+- Apple Foundation Models is the preferred optional Local Semantic adapter on
+  supported Macs. It is conditionally compiled, runtime- and locale-gated, and
+  never becomes a cloud dependency.
 - Cloud OCR is a replaceable port; Google Cloud Vision is the initial candidate
   because Vietnamese is a required language.
 - OpenRouter Chat Completions is the initial vision-language adapter behind a
@@ -89,7 +110,10 @@ Cloud OCR is not part of this slice.
 
 - Preserve Vietnamese diacritics and mixed-language text when recognized.
 - Use image layout plus OCR evidence for decorative poster typography.
-- Trigger fallback when local evidence is insufficient.
+- Keep the deterministic candidate when the semantic model is unavailable,
+  unsupported, fails, or returns evidence that cannot be validated.
+- Keep Local Semantic selected and disclose its actual execution path without
+  routing to cloud processing.
 - Mark disagreements on date, time, or location as ambiguities.
 - Never invent a date when the image contains no date evidence.
 - Never treat vague day-part words such as `tối` or `evening` as clock times.

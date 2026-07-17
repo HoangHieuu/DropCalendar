@@ -10,6 +10,9 @@ An extracted draft owns:
 - title, start, end, location, description, and reminders;
 - evidence, confidence, and inference metadata per field;
 - ambiguities, overall confidence, and confirmation requirement;
+- extraction provenance that distinguishes the Foundation Models,
+  deterministic-fallback, OpenRouter, and Accuracy-fallback paths without
+  turning those paths into additional selectable modes;
 - lifecycle state: draft, reviewed, creating, created, failed, or discarded.
 - an optional SHA-256 source fingerprint used only for local duplicate checks.
 
@@ -79,7 +82,8 @@ remains true for every MVP draft.
 
 SQLite schema version 2 is the local store for minimized draft metadata. It
 persists reviewed fields, field evidence excerpts, reminder choices,
-ambiguities, extraction source, lifecycle, and an optional source fingerprint.
+ambiguities, extraction source and a bounded non-sensitive fallback reason,
+lifecycle, and an optional source fingerprint.
 It does not persist screenshot bytes or the full OCR transcript. Version-1
 databases migrate transactionally before fingerprint writes, and newer unknown
 schemas are rejected instead of guessed.
