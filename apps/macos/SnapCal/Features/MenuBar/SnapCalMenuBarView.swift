@@ -9,9 +9,28 @@ struct SnapCalMenuBarView: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("SnapCal", systemImage: "calendar.badge.plus")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(SnapCalPalette.vermilion)
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("SNAPCAL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundStyle(SnapCalPalette.vermilion)
+                    Text("Screenshot to event")
+                        .font(.system(.headline, design: .serif, weight: .semibold))
+                }
+                Spacer()
+            }
 
             Picker("Extraction mode", selection: $model.extractionMode) {
                 ForEach(ExtractionMode.allCases) { mode in
@@ -19,6 +38,7 @@ struct SnapCalMenuBarView: View {
                 }
             }
             .pickerStyle(.menu)
+            .disabled(isProcessing || model.isCalendarOperationInProgress)
             .accessibilityIdentifier("menuBarExtractionModePicker")
 
             if model.extractionMode == .accuracy,
@@ -96,9 +116,21 @@ struct SnapCalMenuBarView: View {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q")
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(SnapCalPalette.sage)
+                    .frame(width: 6, height: 6)
+                Text("Nothing reaches Calendar until you confirm")
+                    .font(.caption2)
+                    .foregroundStyle(SnapCalPalette.inkMuted)
+            }
         }
-        .padding(14)
-        .frame(width: 250)
+        .padding(16)
+        .frame(width: 276)
+        .background(SnapCalPalette.paper)
+        .foregroundStyle(SnapCalPalette.ink)
+        .tint(SnapCalPalette.vermilion)
     }
 
     private var isProcessing: Bool {

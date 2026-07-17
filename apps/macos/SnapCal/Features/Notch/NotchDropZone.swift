@@ -309,6 +309,8 @@ private struct NotchDropZoneView: View {
     let onExpansionChanged: (Bool) -> Void
     let onDrop: ([NSItemProvider]) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isDropTargeted = false
 
     private var isExpanded: Bool {
@@ -316,21 +318,34 @@ private struct NotchDropZoneView: View {
     }
 
     private var accent: Color {
-        isDropTargeted ? .green : .accentColor
+        isDropTargeted ? SnapCalPalette.sage : SnapCalPalette.vermilion
+    }
+
+    /// The notch stays ink-dark in both system appearances, so the adaptive
+    /// palette's foreground/background roles invert here in dark mode.
+    private var notchInk: Color {
+        colorScheme == .dark ? SnapCalPalette.paper : SnapCalPalette.ink
+    }
+
+    private var notchTeal: Color {
+        colorScheme == .dark ? SnapCalPalette.paperRaised : SnapCalPalette.teal
+    }
+
+    private var notchPaper: Color {
+        colorScheme == .dark ? SnapCalPalette.ink : SnapCalPalette.paper
     }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: isExpanded ? 24 : 15, style: .continuous)
-                .fill(.black.opacity(0.96))
-                .overlay {
-                    RoundedRectangle(cornerRadius: isExpanded ? 24 : 15, style: .continuous)
-                        .stroke(accent.opacity(isDropTargeted ? 0.95 : 0.28), lineWidth: isDropTargeted ? 2 : 1)
-                }
+            shell
 
             if isExpanded {
                 expandedContent
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    .transition(
+                        accessibilityReduceMotion
+                            ? .opacity
+                            : .opacity.combined(with: .scale(scale: 0.94))
+                    )
             } else {
                 collapsedContent
                     .transition(.opacity)
@@ -348,8 +363,14 @@ private struct NotchDropZoneView: View {
         .onChange(of: isExpanded) { _, newValue in
             onExpansionChanged(newValue)
         }
-        .animation(.snappy(duration: 0.24), value: isExpanded)
-        .animation(.easeOut(duration: 0.16), value: isDropTargeted)
+        .animation(
+            accessibilityReduceMotion ? nil : .snappy(duration: 0.24),
+            value: isExpanded
+        )
+        .animation(
+            accessibilityReduceMotion ? nil : .easeOut(duration: 0.16),
+            value: isDropTargeted
+        )
         .shadow(color: .black.opacity(0.34), radius: isExpanded ? 22 : 8, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("SnapCal screenshot drop zone")
@@ -357,16 +378,60 @@ private struct NotchDropZoneView: View {
         .accessibilityIdentifier("notchDropZone")
     }
 
+    private var shell: some View {
+        let shape = RoundedRectangle(
+            cornerRadius: isExpanded ? 24 : 15,
+            style: .continuous
+        )
+
+        return shape
+            .fill(isExpanded ? notchInk : Color.black.opacity(0.98))
+            .overlay {
+                if isExpanded {
+                    shape.fill(
+                        LinearGradient(
+                            colors: [
+                                notchTeal.opacity(0.94),
+                                notchInk.opacity(0.98)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                    NotchRippleLines(
+                        paper: notchPaper,
+                        vermilion: SnapCalPalette.vermilion
+                    )
+                        .clipShape(shape)
+                }
+            }
+            .overlay {
+                shape.stroke(
+                    isDropTargeted
+                        ? accent.opacity(0.94)
+                        : SnapCalPalette.line.opacity(isExpanded ? 0.34 : 0.18),
+                    lineWidth: isDropTargeted ? 2 : 1
+                )
+            }
+    }
+
     private var collapsedContent: some View {
         HStack(spacing: 8) {
-            Image(systemName: "calendar.badge.plus")
-                .foregroundStyle(.white)
+            ZStack {
+                Circle()
+                    .fill(SnapCalPalette.vermilion)
+                    .frame(width: 21, height: 21)
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(notchPaper)
+            }
             Text("SnapCal")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 13, weight: .semibold, design: .serif))
+                .foregroundStyle(notchPaper)
             Image(systemName: "chevron.down")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white.opacity(0.52))
+                .foregroundStyle(notchPaper.opacity(0.54))
         }
         .padding(.horizontal, 16)
     }
@@ -374,37 +439,93 @@ private struct NotchDropZoneView: View {
     private var expandedContent: some View {
         HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(accent.opacity(0.2))
-                    .frame(width: 66, height: 66)
-                Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "photo.badge.plus")
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(accent)
+                Circle()
+                    .fill(notchPaper.opacity(0.14))
+                Circle()
+                    .stroke(SnapCalPalette.line.opacity(0.38), lineWidth: 1)
+                    .padding(1)
+                Circle()
+                    .fill(accent)
+                    .frame(width: 46, height: 46)
+                Circle()
+                    .stroke(notchPaper.opacity(0.34), lineWidth: 1)
+                    .frame(width: 38, height: 38)
+                    .accessibilityHidden(true)
+                Image(systemName: isDropTargeted ? "arrow.down" : "photo.badge.plus")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(notchPaper)
             }
+            .frame(width: 66, height: 66)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(isDropTargeted ? "Release to create a draft" : "Drop event screenshot")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .foregroundStyle(notchPaper)
 
                 Text(presentation.message ?? "PNG, JPG, JPEG, or HEIC • review before creating")
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.66))
+                    .foregroundStyle(notchPaper.opacity(0.72))
                     .lineLimit(2)
 
                 Text(model.extractionMode.title)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(notchPaper)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(accent.opacity(0.14), in: Capsule())
+                    .background(notchPaper.opacity(0.12), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(SnapCalPalette.line.opacity(0.3), lineWidth: 1)
+                    }
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22)
         .padding(.top, 14)
         .padding(.bottom, 18)
-        .scaleEffect(isDropTargeted ? 1.02 : 1)
+        .scaleEffect(isDropTargeted && !accessibilityReduceMotion ? 1.02 : 1)
+    }
+}
+
+private struct NotchRippleLines: View {
+    let paper: Color
+    let vermilion: Color
+
+    var body: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width * 0.88, y: size.height * 0.72)
+
+            for index in 0..<5 {
+                var ripple = Path()
+                ripple.addArc(
+                    center: center,
+                    radius: 26 + CGFloat(index) * 15,
+                    startAngle: .degrees(188),
+                    endAngle: .degrees(338),
+                    clockwise: false
+                )
+                context.stroke(
+                    ripple,
+                    with: .color(paper.opacity(0.055)),
+                    lineWidth: 1
+                )
+            }
+
+            var horizon = Path()
+            horizon.move(to: CGPoint(x: size.width * 0.52, y: size.height * 0.19))
+            horizon.addCurve(
+                to: CGPoint(x: size.width * 0.96, y: size.height * 0.16),
+                control1: CGPoint(x: size.width * 0.66, y: size.height * 0.08),
+                control2: CGPoint(x: size.width * 0.8, y: size.height * 0.28)
+            )
+            context.stroke(
+                horizon,
+                with: .color(vermilion.opacity(0.16)),
+                lineWidth: 1
+            )
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

@@ -5,15 +5,26 @@ struct SnapCalSettingsView: View {
     @Bindable var model: SnapCalModel
 
     var body: some View {
-        TabView {
-            AccountBillingSettingsView(model: model)
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
+        ZStack {
+            WashiCanvas()
 
-            PrivacySettingsView(model: model)
-                .tabItem { Label("Privacy", systemImage: "lock.shield") }
+            TabView {
+                AccountBillingSettingsView(model: model)
+                    .tabItem { Label("Account", systemImage: "person.crop.circle") }
+
+                PrivacySettingsView(model: model)
+                    .tabItem { Label("Privacy", systemImage: "lock.shield") }
+            }
+            .padding(8)
         }
-        .scenePadding()
-        .frame(width: 560, height: 480)
+        .frame(
+            minWidth: 620,
+            idealWidth: 680,
+            minHeight: 520,
+            idealHeight: 580
+        )
+        .foregroundStyle(SnapCalPalette.ink)
+        .tint(SnapCalPalette.vermilion)
     }
 }
 
@@ -27,6 +38,8 @@ struct AccountBillingSettingsView: View {
             privacySummarySection
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .task {
             if case .unavailable = model.accountState {
                 await model.loadAccountState()
@@ -52,7 +65,7 @@ struct AccountBillingSettingsView: View {
                     Text("Checking account…")
                 }
             case .signedOut:
-                Text("Local Only remains anonymous and free. Sign in only when you want Pro Accuracy Mode.")
+                Text("Local Semantic remains anonymous and free. Sign in only when you want Pro Accuracy Mode.")
                     .foregroundStyle(.secondary)
                 Button("Sign In with Google and Connect Calendar") {
                     Task { await model.signInToSnapCal() }
@@ -92,7 +105,7 @@ struct AccountBillingSettingsView: View {
                         .foregroundStyle(.orange)
                 }
                 if account.isQuotaExhausted {
-                    Label("Accuracy is disabled until the next billing period. Local Only remains available.", systemImage: "gauge.with.dots.needle.0percent")
+                    Label("Accuracy is disabled until the next billing period. Local Semantic remains available.", systemImage: "gauge.with.dots.needle.0percent")
                         .foregroundStyle(.secondary)
                 }
 

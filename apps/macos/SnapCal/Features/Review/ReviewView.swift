@@ -10,49 +10,24 @@ struct ReviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Divider().overlay(SnapCalPalette.line.opacity(0.72))
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    extractionSourcePanel
-                    if model.reviewDraftCount > 1 {
-                        multiEventNavigator
-                    }
-                    if !draft.ambiguities.isEmpty {
-                        ambiguityPanel
-                    }
-                    if !model.duplicateWarnings.isEmpty {
-                        duplicatePanel
-                    }
-                    eventDetails
-                    reminderPanel
-                    locationResolutionPanel
-                    evidencePanel
-                    if let historyIssue = model.draftHistoryIssue {
-                        statusBox(
-                            title: "Local history unavailable",
-                            message: historyIssue,
-                            systemImage: "externaldrive.badge.exclamationmark",
-                            color: .orange
-                        )
-                    }
-                    if let privacyIssue = model.privacyIssue {
-                        statusBox(
-                            title: "Screenshot history unavailable",
-                            message: privacyIssue,
-                            systemImage: "lock.trianglebadge.exclamationmark",
-                            color: .orange
-                        )
-                    }
-                    calendarStatusPanel
+            GeometryReader { proxy in
+                if proxy.size.width >= 1_100 {
+                    wideReviewContent
+                } else {
+                    singleColumnReviewContent
                 }
-                .padding(24)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
+            Divider().overlay(SnapCalPalette.line.opacity(0.72))
             footer
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(SnapCalPalette.paper.opacity(0.82))
+        .foregroundStyle(SnapCalPalette.ink)
+        .groupBoxStyle(SnapCalGroupBoxStyle())
         .accessibilityIdentifier("reviewView")
         .confirmationDialog(
             "Create this Google Calendar event?",
@@ -67,6 +42,100 @@ struct ReviewView: View {
             }
         } message: {
             Text(confirmationSummary)
+        }
+    }
+
+    private var singleColumnReviewContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                extractionSourcePanel
+                multiEventSection
+                reviewWarnings
+                eventDetails
+                reminderPanel
+                locationResolutionPanel
+                evidencePanel
+                reviewIssues
+                calendarStatusPanel
+            }
+            .frame(maxWidth: 980, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .padding(24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var wideReviewContent: some View {
+        HStack(alignment: .top, spacing: 20) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    multiEventSection
+                    reviewWarnings
+                    eventDetails
+                    locationResolutionPanel
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            Rectangle()
+                .fill(SnapCalPalette.line.opacity(0.54))
+                .frame(width: 1)
+                .accessibilityHidden(true)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    extractionSourcePanel
+                    reminderPanel
+                    evidencePanel
+                    reviewIssues
+                    calendarStatusPanel
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(width: 340)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: 1_280, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var multiEventSection: some View {
+        if model.reviewDraftCount > 1 {
+            multiEventNavigator
+        }
+    }
+
+    @ViewBuilder
+    private var reviewWarnings: some View {
+        if !draft.ambiguities.isEmpty {
+            ambiguityPanel
+        }
+        if !model.duplicateWarnings.isEmpty {
+            duplicatePanel
+        }
+    }
+
+    @ViewBuilder
+    private var reviewIssues: some View {
+        if let historyIssue = model.draftHistoryIssue {
+            statusBox(
+                title: "Local history unavailable",
+                message: historyIssue,
+                systemImage: "externaldrive.badge.exclamationmark",
+                color: SnapCalPalette.vermilion
+            )
+        }
+        if let privacyIssue = model.privacyIssue {
+            statusBox(
+                title: "Screenshot history unavailable",
+                message: privacyIssue,
+                systemImage: "lock.trianglebadge.exclamationmark",
+                color: SnapCalPalette.vermilion
+            )
         }
     }
 
@@ -129,56 +198,68 @@ struct ReviewView: View {
 
     private var extractionSourceTitle: String {
         switch model.extractionNotice {
-        case .local: return "On-device extraction"
+        case .localSemantic: return "Local Semantic"
+        case .localSemanticFallback: return "Local Semantic — deterministic fallback"
         case .openRouter: return "OpenRouter Accuracy Mode"
-        case .localFallback: return "Accuracy Mode fallback"
+        case .accuracyFallback: return "Accuracy Mode — local fallback"
         }
     }
 
     private var extractionSourceMessage: String {
         switch model.extractionNotice {
-        case .local:
-            return "Apple Vision and SnapCal's local parser created this draft without uploading the image."
+        case .localSemantic(let model):
+            return "Apple Vision OCR and \(model) produced this proposal on-device. Deterministic checks still validate its critical evidence."
+        case .localSemanticFallback(let reason):
+            return "\(reason) SnapCal used deterministic Apple Vision OCR and local parsing instead; the screenshot stayed on this Mac."
         case .openRouter(let model):
             return "The poster and local OCR were processed by \(model). Review the evidence before creating the event."
-        case .localFallback(let reason):
-            return "OpenRouter was not used: \(reason) This draft came from on-device extraction."
+        case .accuracyFallback(let reason):
+            return "Accuracy Mode could not complete: \(reason) This draft came from deterministic on-device extraction."
         }
     }
 
     private var extractionSourceIcon: String {
         switch model.extractionNotice {
-        case .local: return "lock.shield"
+        case .localSemantic: return "brain.head.profile"
+        case .localSemanticFallback: return "lock.shield"
         case .openRouter: return "sparkles"
-        case .localFallback: return "exclamationmark.triangle.fill"
+        case .accuracyFallback: return "exclamationmark.triangle.fill"
         }
     }
 
     private var extractionSourceColor: Color {
         switch model.extractionNotice {
-        case .local: return .green
-        case .openRouter: return .blue
-        case .localFallback: return .orange
+        case .localSemantic: return SnapCalPalette.sage
+        case .localSemanticFallback: return SnapCalPalette.vermilion
+        case .openRouter: return SnapCalPalette.teal
+        case .accuracyFallback: return SnapCalPalette.vermilion
         }
     }
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title)
-                .foregroundStyle(.green)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Review event draft")
-                    .font(.title2.weight(.semibold))
-                Text(model.reviewDraftCount > 1
-                    ? "Review each event separately. Every Calendar write needs its own confirmation."
-                    : "Check every detail. SnapCal creates nothing until you confirm.")
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 9) {
+            SealLabel(kicker: "EVENT DRAFT / REVIEW")
+
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(SnapCalPalette.sage)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Review event draft")
+                        .font(.system(size: 26, weight: .semibold, design: .serif))
+                    Text(model.reviewDraftCount > 1
+                        ? "Review each event separately. Every Calendar write needs its own confirmation."
+                        : "Check every detail. SnapCal creates nothing until you confirm.")
+                        .foregroundStyle(SnapCalPalette.inkMuted)
+                }
+                Spacer()
+                ConfidenceBadge(confidence: overallConfidence)
             }
-            Spacer()
-            ConfidenceBadge(confidence: overallConfidence)
         }
-        .padding(20)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+        .frame(maxWidth: 1_280, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     private var eventDetails: some View {
@@ -225,7 +306,7 @@ struct ReviewView: View {
                             systemImage: "exclamationmark.circle"
                         )
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SnapCalPalette.vermilion)
                         Color.clear.frame(width: 1, height: 1)
                     }
                 }
@@ -252,7 +333,7 @@ struct ReviewView: View {
                         .frame(minHeight: 110)
                         .overlay {
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(.quaternary)
+                                .stroke(SnapCalPalette.line.opacity(0.7))
                         }
                         .accessibilityIdentifier("descriptionField")
                     ConfidenceBadge(confidence: draft.description.confidence)
@@ -268,7 +349,7 @@ struct ReviewView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Check these fields", systemImage: "exclamationmark.triangle.fill")
                     .font(.headline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SnapCalPalette.vermilion)
                 ForEach(draft.ambiguities) { ambiguity in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Circle()
@@ -289,7 +370,7 @@ struct ReviewView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Possible duplicate", systemImage: "rectangle.on.rectangle.badge.exclamationmark")
                     .font(.headline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SnapCalPalette.vermilion)
                 ForEach(model.duplicateWarnings) { warning in
                     Text(warning.message)
                         .font(.callout)
@@ -345,7 +426,7 @@ struct ReviewView: View {
                 if let issue = model.reminderIssue {
                     Label(issue, systemImage: "exclamationmark.triangle")
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SnapCalPalette.vermilion)
                 }
                 Text("Google Calendar supports up to five overrides, from event time to four weeks before.")
                     .font(.caption)
@@ -385,7 +466,7 @@ struct ReviewView: View {
                 if let issue = model.locationResolutionIssue {
                     Label(issue, systemImage: "mappin.slash")
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SnapCalPalette.vermilion)
                 }
 
                 ForEach(model.locationCandidates) { candidate in
@@ -421,7 +502,7 @@ struct ReviewView: View {
                         systemImage: "lock.shield"
                     )
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SnapCalPalette.inkMuted)
                 } else {
                     DisclosureGroup("Full recognized text") {
                         Text(draft.rawOCRText)
@@ -439,7 +520,7 @@ struct ReviewView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(maxHeight: 320)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                             .padding(.top, 8)
                     }
                 }
@@ -458,14 +539,14 @@ struct ReviewView: View {
                 title: "Connect Google Calendar",
                 message: "Finish signing in through your browser. SnapCal requests permission only to create events in calendars you own.",
                 systemImage: "person.badge.key",
-                color: .blue
+                color: SnapCalPalette.teal
             )
         case .creating:
             statusBox(
                 title: "Creating event",
                 message: "Google Calendar is processing the confirmed event.",
                 systemImage: "calendar.badge.plus",
-                color: .blue
+                color: SnapCalPalette.teal
             )
         case .created(let receipt):
             GroupBox {
@@ -491,7 +572,7 @@ struct ReviewView: View {
                 title: issue.title,
                 message: issue.message,
                 systemImage: "exclamationmark.triangle.fill",
-                color: .orange
+                color: SnapCalPalette.vermilion
             )
         }
     }
@@ -532,7 +613,16 @@ struct ReviewView: View {
             .disabled(!model.canRequestCalendarCreation)
             .accessibilityIdentifier("createEventButton")
         }
-        .padding(16)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 15)
+        .frame(maxWidth: 1_280)
+        .frame(maxWidth: .infinity)
+        .background(SnapCalPalette.paperRaised)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(SnapCalPalette.line.opacity(0.72))
+                .frame(height: 1)
+        }
     }
 
     private var titleBinding: Binding<String> {
@@ -634,7 +724,7 @@ struct ReviewView: View {
         HStack(spacing: 4) {
             Text(text)
             if required {
-                Text("*").foregroundStyle(.red)
+                Text("*").foregroundStyle(SnapCalPalette.vermilion)
             }
         }
         .font(.callout.weight(.medium))
@@ -649,7 +739,7 @@ struct ReviewView: View {
                 .frame(width: 108, alignment: .leading)
             Text(evidence ?? "No supporting text detected")
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(evidence == nil ? .secondary : .primary)
+                .foregroundStyle(evidence == nil ? SnapCalPalette.inkMuted : SnapCalPalette.ink)
                 .textSelection(.enabled)
         }
     }
@@ -662,7 +752,7 @@ struct ReviewView: View {
                     .foregroundStyle(color)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(title).font(.headline)
-                    Text(message).foregroundStyle(.secondary)
+                    Text(message).foregroundStyle(SnapCalPalette.inkMuted)
                 }
                 Spacer()
             }
@@ -672,9 +762,8 @@ struct ReviewView: View {
 
     private func color(for severity: AmbiguitySeverity) -> Color {
         switch severity {
-        case .low: return .yellow
-        case .medium: return .orange
-        case .high: return .red
+        case .low: return SnapCalPalette.sage
+        case .medium, .high: return SnapCalPalette.vermilion
         }
     }
 }
@@ -703,9 +792,9 @@ private struct ConfidenceBadge: View {
 
     private var color: Color {
         switch confidence {
-        case 0.8...: return .green
-        case 0.5..<0.8: return .orange
-        default: return .red
+        case 0.8...: return SnapCalPalette.sage
+        case 0.5..<0.8: return SnapCalPalette.vermilion
+        default: return SnapCalPalette.vermilion
         }
     }
 }

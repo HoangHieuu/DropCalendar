@@ -36,12 +36,14 @@ struct PrivacySettingsView: View {
             }
 
             Section("Processing") {
-                Text("Local Only keeps screenshot and OCR processing on this Mac. Accuracy Mode is opt-in and sends the image and OCR text through the configured SnapCal service to OpenRouter.")
+                Text("Local Semantic keeps screenshot, OCR, Apple on-device model, and deterministic fallback processing on this Mac. Accuracy Mode is opt-in and sends the image and OCR text through the configured SnapCal service to OpenRouter.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .confirmationDialog(
             "Clear all SnapCal local history?",
             isPresented: $isClearConfirmationPresented,

@@ -6,55 +6,94 @@ struct ContentView: View {
     @State private var isImporterPresented = false
 
     var body: some View {
-        Group {
-            switch model.phase {
-            case .ready:
-                HStack(spacing: 0) {
-                    ImportView(
-                        extractionMode: Binding(
-                            get: { model.extractionMode },
-                            set: { model.extractionMode = $0 }
-                        ),
-                        canImport: model.canImportSelectedMode,
-                        accountMessage: model.accuracyAccountMessage,
-                        accountActionTitle: model.accuracyAccountActionTitle,
-                        onAccountAction: {
-                            Task { await model.performAccuracyAccountAction() }
-                        },
-                        onChooseScreenshot: { isImporterPresented = true },
-                        onPasteScreenshot: {
-                            Task { await model.importClipboardImage() }
+        ZStack {
+            WashiCanvas()
+
+            Group {
+                switch model.phase {
+                case .ready:
+                    GeometryReader { proxy in
+                        let historyWidth = min(
+                            max(proxy.size.width * 0.25, 288),
+                            360
+                        )
+
+                        HStack(spacing: 0) {
+                            ImportView(
+                                extractionMode: Binding(
+                                    get: { model.extractionMode },
+                                    set: { model.extractionMode = $0 }
+                                ),
+                                canImport: model.canImportSelectedMode,
+                                accountMessage: model.accuracyAccountMessage,
+                                accountActionTitle: model.accuracyAccountActionTitle,
+                                onAccountAction: {
+                                    Task { await model.performAccuracyAccountAction() }
+                                },
+                                onChooseScreenshot: { isImporterPresented = true },
+                                onPasteScreenshot: {
+                                    Task { await model.importClipboardImage() }
+                                }
+                            )
+                            .frame(
+                                maxWidth: .infinity,
+                                maxHeight: .infinity
+                            )
+                            .accessibilityIdentifier("importWorkspace")
+
+                            Rectangle()
+                                .fill(SnapCalPalette.line)
+                                .frame(width: 1)
+                                .accessibilityHidden(true)
+
+                            RecentDraftsView(
+                                drafts: model.recentDrafts,
+                                issue: model.draftHistoryIssue,
+                                onOpen: { id in
+                                    Task { await model.openRecentDraft(id: id) }
+                                },
+                                onDelete: { id in
+                                    Task { await model.deleteRecentDraft(id: id) }
+                                }
+                            )
+                            .frame(width: historyWidth)
+                            .frame(
+                                maxHeight: .infinity,
+                                alignment: .topLeading
+                            )
                         }
+                        .frame(
+                            width: proxy.size.width,
+                            height: proxy.size.height,
+                            alignment: .topLeading
+                        )
+                    }
+                case .processing(let fileName):
+                    ProcessingView(
+                        fileName: fileName,
+                        mode: model.extractionMode,
+                        stage: model.processingStage
                     )
-                    Divider()
-                    RecentDraftsView(
-                        drafts: model.recentDrafts,
-                        issue: model.draftHistoryIssue,
-                        onOpen: { id in
-                            Task { await model.openRecentDraft(id: id) }
-                        },
-                        onDelete: { id in
-                            Task { await model.deleteRecentDraft(id: id) }
-                        }
+                case .review:
+                    ReviewView(model: model)
+                case .failed(let issue):
+                    ImportErrorView(
+                        issue: issue,
+                        onRetry: { isImporterPresented = true },
+                        onCancel: model.startOver
                     )
                 }
-            case .processing(let fileName):
-                ProcessingView(
-                    fileName: fileName,
-                    mode: model.extractionMode,
-                    stage: model.processingStage
-                )
-            case .review:
-                ReviewView(model: model)
-            case .failed(let issue):
-                ImportErrorView(
-                    issue: issue,
-                    onRetry: { isImporterPresented = true },
-                    onCancel: model.startOver
-                )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 760, minHeight: 560)
+        .frame(
+            minWidth: 760,
+            maxWidth: .infinity,
+            minHeight: 560,
+            maxHeight: .infinity
+        )
+        .foregroundStyle(SnapCalPalette.ink)
+        .tint(SnapCalPalette.vermilion)
         .task {
             await model.loadCalendarConnectionStatus()
             await model.loadAccountState()

@@ -9,9 +9,28 @@ struct RecentDraftsView: View {
     @State private var pendingDeletion: RecentDraftSummary?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Recent Drafts", systemImage: "clock.arrow.circlepath")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(SnapCalPalette.vermilion)
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("ARCHIVE / 02")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(SnapCalPalette.vermilion)
+                    Text("Recent Drafts")
+                        .font(.system(.title3, design: .serif, weight: .semibold))
+                }
+                Spacer(minLength: 0)
+            }
 
             if let issue {
                 Label(issue, systemImage: "exclamationmark.triangle")
@@ -21,13 +40,22 @@ struct RecentDraftsView: View {
             }
 
             if drafts.isEmpty {
-                Text("Imported drafts will appear here without retaining screenshot bytes or the full OCR transcript.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "rectangle.stack.badge.plus")
+                        .font(.title2)
+                        .foregroundStyle(SnapCalPalette.teal)
+                    Text("Your review queue is clear")
+                        .font(.headline)
+                    Text("Imported drafts will appear here without retaining screenshot bytes or the full OCR transcript.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .snapCalCard(padding: 16, cornerRadius: 16)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 10) {
                         ForEach(drafts) { draft in
                             row(draft)
                         }
@@ -39,11 +67,15 @@ struct RecentDraftsView: View {
 
             Label("Stored only on this Mac", systemImage: "lock.shield")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SnapCalPalette.inkMuted)
         }
-        .padding(18)
-        .frame(width: 300, alignment: .topLeading)
-        .background(.background.secondary)
+        .padding(20)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
+        .background(SnapCalPalette.paperRaised.opacity(0.74))
         .confirmationDialog(
             "Delete this saved draft?",
             isPresented: deletionPresented,
@@ -61,11 +93,21 @@ struct RecentDraftsView: View {
         } message: {
             Text("This removes the local history record. It does not delete an event already created in Google Calendar.")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("recentDraftsView")
     }
 
     private func row(_ draft: RecentDraftSummary) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            Capsule()
+                .fill(
+                    draft.lifecycle == .created
+                        ? SnapCalPalette.sage
+                        : SnapCalPalette.vermilion
+                )
+                .frame(width: 4)
+                .accessibilityHidden(true)
+
             Button {
                 onOpen(draft.id)
             } label: {
@@ -77,7 +119,7 @@ struct RecentDraftsView: View {
                         Spacer(minLength: 4)
                         if draft.lifecycle == .created {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(SnapCalPalette.sage)
                                 .accessibilityLabel("Created")
                         }
                     }
@@ -96,12 +138,21 @@ struct RecentDraftsView: View {
                 pendingDeletion = draft
             } label: {
                 Image(systemName: "trash")
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Delete draft \(draft.title)")
         }
         .padding(10)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+        .background(
+            SnapCalPalette.paperRaised.opacity(0.72),
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(SnapCalPalette.line, lineWidth: 1)
+        }
     }
 
     private var deletionPresented: Binding<Bool> {
