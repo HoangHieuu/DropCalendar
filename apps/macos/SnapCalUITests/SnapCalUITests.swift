@@ -22,6 +22,36 @@ final class SnapCalUITests: XCTestCase {
         pasteboardSnapshot = nil
     }
 
+    func testImportShowsExactlyLocalSemanticAndAccuracyModes() {
+        launch(reset: true)
+
+        // SwiftUI exposes a macOS segmented Picker as a RadioGroup on newer
+        // SDKs. Query the shared identifier first so the contract remains
+        // stable across those accessibility-role changes.
+        let picker = app.descendants(matching: .any)["extractionModePicker"]
+        XCTAssertTrue(
+            picker.waitForExistence(timeout: 5),
+            "The import screen should expose the shared two-mode selector."
+        )
+        let modeButtons = picker.radioButtons
+        XCTAssertEqual(modeButtons.count, 2)
+        XCTAssertTrue(modeButtons["Local Semantic"].exists)
+        XCTAssertTrue(modeButtons["Accuracy Mode"].exists)
+        XCTAssertFalse(modeButtons["Local Only"].exists)
+
+        let disclosure = app.descendants(matching: .any)["extractionModeDisclosure"]
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 5))
+        let disclosureText = (disclosure.value as? String) ?? disclosure.label
+        XCTAssertTrue(
+            disclosureText.contains("on-device language model"),
+            "disclosure text: \(disclosureText)"
+        )
+        XCTAssertTrue(
+            disclosureText.contains("deterministic local fallback"),
+            "disclosure text: \(disclosureText)"
+        )
+    }
+
     func testClipboardImportPersistsDraftAcrossRelaunch() throws {
         launch(reset: true)
         try putFixtureOnPasteboard(named: "en-051.png")
@@ -33,11 +63,25 @@ final class SnapCalUITests: XCTestCase {
         let titleField = app.textFields["titleField"]
         XCTAssertTrue(
             titleField.waitForExistence(timeout: 30),
-            "The production clipboard, Vision OCR, and Local Only extraction path should reach Review."
+            "The production clipboard, Vision OCR, and Local Semantic fallback path should reach Review."
         )
         XCTAssertEqual(
             titleField.value as? String,
             "AI COMMUNITY MEETUP 051"
+        )
+        XCTAssertTrue(
+            app.staticTexts["Local Semantic — deterministic fallback"]
+                .waitForExistence(timeout: 5)
+        )
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(
+                    format: "value CONTAINS %@",
+                    "Apple Intelligence is not enabled on this Mac."
+                )
+            )
+            .firstMatch
+            .waitForExistence(timeout: 5)
         )
 
         app.terminate()
@@ -50,6 +94,10 @@ final class SnapCalUITests: XCTestCase {
         )
         savedDraft.click()
         XCTAssertTrue(app.textFields["titleField"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.staticTexts["Local Semantic — deterministic fallback"]
+                .waitForExistence(timeout: 5)
+        )
     }
 
     func testMenuBarEntryPointExposesClipboardAction() {
@@ -69,6 +117,9 @@ final class SnapCalUITests: XCTestCase {
         XCTAssertTrue(
             app.buttons["menuBarPasteScreenshotButton"].waitForExistence(timeout: 5),
             "Opening the status item should expose the clipboard-import action."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["menuBarExtractionModePicker"].exists
         )
     }
 
@@ -97,6 +148,43 @@ final class SnapCalUITests: XCTestCase {
             XCTAssertEqual(notch.frame.width, settledFrame.width, accuracy: 1)
             XCTAssertEqual(notch.frame.height, settledFrame.height, accuracy: 1)
         }
+    }
+
+    func testFullscreenReadyLayoutClaimsTrailingEdge() {
+        launch(reset: true)
+
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5))
+
+        let zoomButton = window.buttons.matching(
+            NSPredicate(
+                format: "label CONTAINS[c] %@",
+                "full screen"
+            )
+        ).firstMatch
+
+        if zoomButton.waitForExistence(timeout: 2) {
+            zoomButton.click()
+        } else {
+            // The standard macOS window control is not exposed consistently
+            // across Xcode/macOS versions; title-bar zoom is the fallback.
+            window.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02)
+            ).doubleClick()
+        }
+
+        let historyRail = app.descendants(matching: .any)["recentDraftsView"]
+        XCTAssertTrue(
+            historyRail.waitForExistence(timeout: 5),
+            "The history rail should remain visible after the window expands."
+        )
+
+        let trailingDelta = abs(historyRail.frame.maxX - window.frame.maxX)
+        XCTAssertLessThanOrEqual(
+            trailingDelta,
+            4,
+            "The ready layout must own the trailing edge in full screen."
+        )
     }
 
     private func launch(reset: Bool) {

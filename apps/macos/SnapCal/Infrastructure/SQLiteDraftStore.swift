@@ -41,13 +41,24 @@ struct PersistedDraft: Codable, Equatable, Sendable {
 
     struct Source: Codable, Equatable, Sendable {
         enum Kind: String, Codable, Sendable {
+            // Legacy values remain decodable for drafts saved before Local Semantic.
             case local
             case openRouter
             case localFallback
+            case localSemantic
+            case localSemanticFallback
+            case accuracyFallback
         }
 
         let kind: Kind
         let model: String?
+        let reason: String?
+
+        init(kind: Kind, model: String? = nil, reason: String? = nil) {
+            self.kind = kind
+            self.model = model
+            self.reason = reason
+        }
     }
 
     struct Receipt: Codable, Equatable, Sendable {
@@ -166,12 +177,17 @@ struct PersistedDraft: Codable, Equatable, Sendable {
         }
         requiresUserConfirmation = draft.requiresUserConfirmation
         switch extractionNotice {
-        case .local:
-            extractionSource = Source(kind: .local, model: nil)
+        case .localSemantic(let model):
+            extractionSource = Source(kind: .localSemantic, model: model)
+        case .localSemanticFallback(let reason):
+            extractionSource = Source(
+                kind: .localSemanticFallback,
+                reason: reason
+            )
         case .openRouter(let model):
             extractionSource = Source(kind: .openRouter, model: model)
-        case .localFallback:
-            extractionSource = Source(kind: .localFallback, model: nil)
+        case .accuracyFallback(let reason):
+            extractionSource = Source(kind: .accuracyFallback, reason: reason)
         }
         self.lifecycle = lifecycle
         self.receipt = receipt.map {
@@ -236,12 +252,28 @@ struct PersistedDraft: Codable, Equatable, Sendable {
         let notice: ExtractionNotice
         switch extractionSource.kind {
         case .local:
-            notice = .local
+            notice = .localSemanticFallback(
+                reason: "This saved draft used deterministic local extraction before Local Semantic was introduced."
+            )
         case .openRouter:
             notice = .openRouter(model: extractionSource.model ?? "OpenRouter")
         case .localFallback:
-            notice = .localFallback(
-                reason: "This saved draft used the on-device fallback."
+            notice = .accuracyFallback(
+                reason: "This saved Accuracy draft used the deterministic on-device fallback."
+            )
+        case .localSemantic:
+            notice = .localSemantic(
+                model: extractionSource.model ?? "Apple Foundation Models"
+            )
+        case .localSemanticFallback:
+            notice = .localSemanticFallback(
+                reason: extractionSource.reason
+                    ?? "This saved draft used deterministic on-device extraction."
+            )
+        case .accuracyFallback:
+            notice = .accuracyFallback(
+                reason: extractionSource.reason
+                    ?? "This saved Accuracy draft used deterministic on-device extraction."
             )
         }
         let restoredReceipt = receipt.map {

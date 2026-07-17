@@ -142,19 +142,34 @@ final class PaidBetaIsolationTests: XCTestCase {
         XCTAssertEqual(planCalls, 0)
     }
 
-    func testLocalOnlyMakesNoAccountOrCloudCall() async throws {
+    func testLocalSemanticFallbackMakesNoAccountOrCloudCall() async throws {
         let account = AccountServiceSpy()
+        let semantic = LocalSemanticExtractorSpy()
         let cloud = CloudExtractorSpy()
-        let model = makeModel(account: account, cloud: cloud, policy: .proRequired)
-        model.extractionMode = .localOnly
+        let model = makeModel(
+            account: account,
+            semantic: semantic,
+            cloud: cloud,
+            policy: .proRequired
+        )
+        model.extractionMode = .localSemantic
 
         await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/local.png"))
 
         XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.extractionMode, .localSemantic)
         let accountCalls = await account.totalCalls()
+        let semanticCalls = await semantic.callCount()
         let cloudCalls = await cloud.callCount()
         XCTAssertEqual(accountCalls, 0)
+        XCTAssertEqual(semanticCalls, 1)
         XCTAssertEqual(cloudCalls, 0)
+        XCTAssertEqual(
+            model.extractionNotice,
+            .localSemanticFallback(
+                reason: "Apple's on-device language model is not included in this build."
+            )
+        )
     }
 
     func testSignedOutProductionAccuracyStopsBeforeOCRAndProvider() async throws {
@@ -186,6 +201,7 @@ final class PaidBetaIsolationTests: XCTestCase {
 
     private func makeModel(
         account: AccountServiceSpy,
+        semantic: LocalSemanticExtractorSpy = LocalSemanticExtractorSpy(),
         cloud: CloudExtractorSpy,
         policy: AccuracyAccessPolicy,
         ocr: OCRSpy = OCRSpy()
@@ -194,6 +210,7 @@ final class PaidBetaIsolationTests: XCTestCase {
             validator: PaidBetaValidator(image: makeValidatedImage()),
             ocrService: ocr,
             extractor: LocalEventExtractor(),
+            localSemanticExtractor: semantic,
             cloudExtractor: cloud,
             accountService: account,
             accuracyAccessPolicy: policy
@@ -260,6 +277,21 @@ private actor OCRSpy: OCRRecognizing {
             RecognizedTextLine(text: "AI Workshop", confidence: 0.98),
             RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.97),
         ]
+    }
+
+    func callCount() -> Int { calls }
+}
+
+private actor LocalSemanticExtractorSpy: LocalSemanticEventExtracting {
+    private var calls = 0
+
+    func extract(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> LocalSemanticExtractionResult {
+        calls += 1
+        throw LocalSemanticExtractionError.unavailable(.frameworkUnavailable)
     }
 
     func callCount() -> Int { calls }

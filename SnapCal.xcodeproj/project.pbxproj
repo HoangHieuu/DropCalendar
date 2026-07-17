@@ -55,6 +55,8 @@
 		B00000000000000000000032 /* AppUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000032 /* AppUpdateController.swift */; };
 		B00000000000000000000033 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = Q00000000000000000000001 /* Sparkle */; };
 		B00000000000000000000034 /* PaidBetaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000034 /* PaidBetaTests.swift */; };
+		B00000000000000000000035 /* FoundationModelsEventExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000035 /* FoundationModelsEventExtractor.swift */; };
+		B00000000000000000000036 /* SnapCalVisualSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000036 /* SnapCalVisualSystem.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -126,6 +128,8 @@
 		F00000000000000000000031 /* AccountBillingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountBillingSettingsView.swift; sourceTree = "<group>"; };
 		F00000000000000000000032 /* AppUpdateController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateController.swift; sourceTree = "<group>"; };
 		F00000000000000000000034 /* PaidBetaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaidBetaTests.swift; sourceTree = "<group>"; };
+		F00000000000000000000035 /* FoundationModelsEventExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsEventExtractor.swift; sourceTree = "<group>"; };
+		F00000000000000000000036 /* SnapCalVisualSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapCalVisualSystem.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -183,6 +187,7 @@
 			children = (
 				F00000000000000000000001 /* SnapCalApp.swift */,
 				F00000000000000000000002 /* ContentView.swift */,
+				F00000000000000000000036 /* SnapCalVisualSystem.swift */,
 				F00000000000000000000032 /* AppUpdateController.swift */,
 			);
 			path = App;
@@ -214,6 +219,7 @@
 				F00000000000000000000005 /* ImageValidator.swift */,
 				F00000000000000000000006 /* VisionOCRService.swift */,
 				F00000000000000000000007 /* LocalEventExtractor.swift */,
+				F00000000000000000000035 /* FoundationModelsEventExtractor.swift */,
 				F00000000000000000000011 /* HTTPTransport.swift */,
 				F00000000000000000000012 /* KeychainCredentialStore.swift */,
 				F00000000000000000000013 /* LoopbackOAuthServer.swift */,
@@ -468,11 +474,13 @@
 			files = (
 				B00000000000000000000001 /* SnapCalApp.swift in Sources */,
 				B00000000000000000000002 /* ContentView.swift in Sources */,
+				B00000000000000000000036 /* SnapCalVisualSystem.swift in Sources */,
 				B00000000000000000000003 /* SnapCalModel.swift in Sources */,
 				B00000000000000000000004 /* EventDraft.swift in Sources */,
 				B00000000000000000000005 /* ImageValidator.swift in Sources */,
 				B00000000000000000000006 /* VisionOCRService.swift in Sources */,
 				B00000000000000000000007 /* LocalEventExtractor.swift in Sources */,
+				B00000000000000000000035 /* FoundationModelsEventExtractor.swift in Sources */,
 				B00000000000000000000008 /* ImportView.swift in Sources */,
 				B00000000000000000000009 /* ReviewView.swift in Sources */,
 				B00000000000000000000010 /* CalendarEvent.swift in Sources */,

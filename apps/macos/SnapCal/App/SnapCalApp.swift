@@ -10,7 +10,7 @@ struct SnapCalApp: App {
         WindowGroup("SnapCal", id: "main") {
             SnapCalRootView(model: model, appDelegate: appDelegate)
         }
-        .defaultSize(width: 920, height: 680)
+        .defaultSize(width: 1120, height: 760)
         .windowResizability(.contentMinSize)
 
         MenuBarExtra {

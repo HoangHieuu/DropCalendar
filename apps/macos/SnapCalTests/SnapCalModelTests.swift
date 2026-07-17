@@ -4,6 +4,14 @@ import XCTest
 
 @MainActor
 final class SnapCalModelTests: XCTestCase {
+    func testExtractionModeExposesExactlyLocalSemanticAndAccuracy() {
+        XCTAssertEqual(ExtractionMode.allCases, [.localSemantic, .accuracy])
+        XCTAssertEqual(
+            ExtractionMode.allCases.map(\.title),
+            ["Local Semantic", "Accuracy Mode"]
+        )
+    }
+
     func testValidImportMovesModelToEditableReview() async throws {
         let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
         let validator = StubValidator(image: try makeValidatedImage(capturedAt: capturedAt))
@@ -281,8 +289,51 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertEqual(model.calendarState, .awaitingConfirmation)
     }
 
-    func testLocalOnlyNeverCallsCloudExtractor() async throws {
+    func testLocalSemanticUsesSemanticDraftWithoutCallingCloud() async throws {
         let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let semantic = SpyLocalSemanticExtractor(result: .success(
+            LocalSemanticExtractionResult(
+                drafts: [makeCloudDraft(capturedAt: capturedAt)],
+                model: "Apple Foundation Models"
+            )
+        ))
+        let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
+            draft: makeCloudDraft(capturedAt: capturedAt),
+            model: "google/gemini-3.1-flash-lite"
+        )))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AGENTIC AI", confidence: 0.95),
+                RecognizedTextLine(text: "BUILD WEEK", confidence: 0.95),
+                RecognizedTextLine(text: "July 8 - July 12, 2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            localSemanticExtractor: semantic,
+            cloudExtractor: cloud
+        )
+        model.extractionMode = .localSemantic
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/poster.png"))
+
+        let semanticCalls = await semantic.callCount()
+        let cloudCalls = await cloud.callCount()
+        XCTAssertEqual(semanticCalls, 1)
+        XCTAssertEqual(cloudCalls, 0)
+        XCTAssertEqual(model.extractionMode, .localSemantic)
+        XCTAssertEqual(model.draft.title.value, "Agentic AI Build Week")
+        XCTAssertEqual(
+            model.extractionNotice,
+            .localSemantic(model: "Apple Foundation Models")
+        )
+        XCTAssertEqual(model.phase, .review)
+    }
+
+    func testLocalSemanticFailureUsesDeterministicFallbackWithoutCallingCloud() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let semantic = SpyLocalSemanticExtractor(result: .failure(
+            LocalSemanticExtractionError.unavailable(.modelNotReady)
+        ))
         let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
             draft: makeCloudDraft(capturedAt: capturedAt),
             model: "google/gemini-3.1-flash-lite"
@@ -294,16 +345,88 @@ final class SnapCalModelTests: XCTestCase {
                 RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
             ]),
             extractor: LocalEventExtractor(),
+            localSemanticExtractor: semantic,
             cloudExtractor: cloud
         )
-        model.extractionMode = .localOnly
+        model.extractionMode = .localSemantic
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
+        let semanticCalls = await semantic.callCount()
+        let cloudCalls = await cloud.callCount()
+        XCTAssertEqual(semanticCalls, 1)
+        XCTAssertEqual(cloudCalls, 0)
+        XCTAssertEqual(model.extractionMode, .localSemantic)
+        XCTAssertEqual(model.phase, .review)
+        XCTAssertEqual(model.draft.title.value, "AI Workshop")
+        XCTAssertTrue(model.draft.ambiguities.contains { $0.field == .extraction })
+        XCTAssertEqual(
+            model.extractionNotice,
+            .localSemanticFallback(
+                reason: "Apple's on-device language model is not ready yet."
+            )
+        )
+    }
+
+    func testLocalSemanticCancellationDoesNotCreateFallbackDraft() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let semantic = SpyLocalSemanticExtractor(result: .failure(CancellationError()))
+        let cloud = SpyCloudExtractor(result: .success(CloudExtractionResult(
+            draft: makeCloudDraft(capturedAt: capturedAt),
+            model: "google/gemini-3.1-flash-lite"
+        )))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: [
+                RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+                RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+            ]),
+            extractor: LocalEventExtractor(),
+            localSemanticExtractor: semantic,
+            cloudExtractor: cloud
+        )
 
         await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
 
         let cloudCalls = await cloud.callCount()
         XCTAssertEqual(cloudCalls, 0)
-        XCTAssertEqual(model.extractionNotice, .local)
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertTrue(model.reviewDrafts.isEmpty)
+    }
+
+    func testLocalSemanticClockDisagreementIsVisibleEvenOnSameDay() async throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_783_930_400)
+        let lines = [
+            RecognizedTextLine(text: "AI Workshop", confidence: 0.95),
+            RecognizedTextLine(text: "20h ngày 15/8/2026", confidence: 0.93)
+        ]
+        var semanticDraft = try LocalEventExtractor().extract(
+            lines: lines,
+            capturedAt: capturedAt,
+            sourceFileName: "workshop.png"
+        )
+        semanticDraft.start.value = semanticDraft.start.value?.addingTimeInterval(-3_600)
+        semanticDraft.start.confidence = 0.98
+        let semantic = SpyLocalSemanticExtractor(result: .success(
+            LocalSemanticExtractionResult(
+                drafts: [semanticDraft],
+                model: "Apple Foundation Models"
+            )
+        ))
+        let model = SnapCalModel(
+            validator: StubValidator(image: try makeValidatedImage(capturedAt: capturedAt)),
+            ocrService: StubOCR(lines: lines),
+            extractor: LocalEventExtractor(),
+            localSemanticExtractor: semantic
+        )
+
+        await model.importScreenshot(from: URL(fileURLWithPath: "/tmp/workshop.png"))
+
         XCTAssertEqual(model.phase, .review)
+        XCTAssertTrue(model.draft.ambiguities.contains {
+            $0.field == .dateTime && $0.message.contains("different dates or times")
+        })
+        XCTAssertEqual(model.draft.start.confidence, 0.49)
     }
 
     func testAccuracyModeUsesCloudDraft() async throws {
@@ -356,7 +479,7 @@ final class SnapCalModelTests: XCTestCase {
         XCTAssertTrue(model.draft.ambiguities.contains { $0.field == .extraction })
         XCTAssertEqual(
             model.extractionNotice,
-            .localFallback(reason: "Accuracy Mode is temporarily unavailable.")
+            .accuracyFallback(reason: "Accuracy Mode is temporarily unavailable.")
         )
     }
 
@@ -683,6 +806,26 @@ final class SnapCalModelTests: XCTestCase {
             ambiguities: []
         )
     }
+}
+
+private actor SpyLocalSemanticExtractor: LocalSemanticEventExtracting {
+    private let result: Result<LocalSemanticExtractionResult, Error>
+    private var calls = 0
+
+    init(result: Result<LocalSemanticExtractionResult, Error>) {
+        self.result = result
+    }
+
+    func extract(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> LocalSemanticExtractionResult {
+        calls += 1
+        return try result.get()
+    }
+
+    func callCount() -> Int { calls }
 }
 
 private actor SpyCloudExtractor: CloudEventExtracting {

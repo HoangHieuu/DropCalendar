@@ -33,7 +33,7 @@ struct ImportIssue: Equatable {
             message = ocrError.errorDescription ?? "SnapCal could not read text from this screenshot."
         } else if let accountError = error as? SnapCalAccountError {
             title = "Accuracy Mode unavailable"
-            message = accountError.errorDescription ?? "Use Local Only or review your SnapCal account."
+            message = accountError.errorDescription ?? "Use Local Semantic or review your SnapCal account."
         } else {
             title = "Import failed"
             message = error.localizedDescription
@@ -50,8 +50,10 @@ final class SnapCalModel {
     private(set) var reviewDraftIndex = 0
     var calendarState: CalendarCreationState = .idle
     var isGoogleConnected = false
-    var extractionMode: ExtractionMode = .localOnly
-    var extractionNotice: ExtractionNotice = .local
+    var extractionMode: ExtractionMode = .localSemantic
+    var extractionNotice: ExtractionNotice = .localSemanticFallback(
+        reason: "The deterministic local extractor is ready."
+    )
     var recentDrafts: [RecentDraftSummary] = []
     var draftHistoryIssue: String?
     var duplicateWarnings: [DuplicateWarning] = []
@@ -70,6 +72,7 @@ final class SnapCalModel {
     private let clipboardReader: any ClipboardImageReading
     private let ocrService: any OCRRecognizing
     private let extractor: any EventExtracting
+    private let localSemanticExtractor: any LocalSemanticEventExtracting
     private let cloudExtractor: any CloudEventExtracting
     private let calendarScheduler: any CalendarScheduling
     private let draftStore: any DraftPersisting
@@ -87,6 +90,7 @@ final class SnapCalModel {
         clipboardReader: (any ClipboardImageReading)? = nil,
         ocrService: any OCRRecognizing,
         extractor: any EventExtracting,
+        localSemanticExtractor: any LocalSemanticEventExtracting = DisabledLocalSemanticEventExtractor(),
         cloudExtractor: any CloudEventExtracting = DisabledCloudEventExtractor(),
         calendarScheduler: any CalendarScheduling = DisabledCalendarScheduler(),
         draftStore: any DraftPersisting = DisabledDraftStore(),
@@ -101,6 +105,7 @@ final class SnapCalModel {
         self.clipboardReader = clipboardReader ?? DisabledClipboardImageReader()
         self.ocrService = ocrService
         self.extractor = extractor
+        self.localSemanticExtractor = localSemanticExtractor
         self.cloudExtractor = cloudExtractor
         self.calendarScheduler = calendarScheduler
         self.draftStore = draftStore
@@ -161,6 +166,7 @@ final class SnapCalModel {
             clipboardReader: SystemClipboardImageReader(),
             ocrService: VisionOCRService(),
             extractor: LocalEventExtractor(),
+            localSemanticExtractor: LocalSemanticEventExtractorFactory.live(),
             cloudExtractor: cloudExtractor,
             calendarScheduler: calendarScheduler,
             draftStore: draftStore,
@@ -217,6 +223,9 @@ final class SnapCalModel {
             clipboardReader: SystemClipboardImageReader(),
             ocrService: VisionOCRService(),
             extractor: LocalEventExtractor(),
+            localSemanticExtractor: DisabledLocalSemanticEventExtractor(
+                reason: .appleIntelligenceNotEnabled
+            ),
             cloudExtractor: DisabledCloudEventExtractor(),
             calendarScheduler: DisabledCalendarScheduler(),
             draftStore: draftStore,
@@ -229,7 +238,7 @@ final class SnapCalModel {
     }
 
     var canImportSelectedMode: Bool {
-        extractionMode == .localOnly || canUseAccuracy
+        extractionMode == .localSemantic || canUseAccuracy
     }
 
     var canUseAccuracy: Bool {
@@ -245,7 +254,7 @@ final class SnapCalModel {
         guard accuracyAccessPolicy == .proRequired else { return nil }
         switch accountState {
         case .unavailable:
-            return "SnapCal's hosted service is not configured. Local Only remains available."
+            return "SnapCal's hosted service is not configured. Local Semantic remains available."
         case .loading:
             return "Checking your SnapCal account…"
         case .signedOut:
@@ -378,7 +387,7 @@ final class SnapCalModel {
     func signOutOfSnapCal() async {
         await accountService.signOut()
         accountState = .signedOut
-        extractionMode = .localOnly
+        extractionMode = .localSemantic
     }
 
     private func refreshPlanCatalog() async {
@@ -471,7 +480,9 @@ final class SnapCalModel {
         reviewDraftIndex = 0
         reviewCalendarStates = [:]
         calendarState = .idle
-        extractionNotice = .local
+        extractionNotice = .localSemanticFallback(
+            reason: "The deterministic local extractor is ready."
+        )
         duplicateWarnings = []
         locationCandidates = []
         locationResolutionIssue = nil
@@ -723,15 +734,14 @@ final class SnapCalModel {
     private func process(_ image: ValidatedImage) async throws {
         let extractedDrafts: [EventDraft]
         switch extractionMode {
-        case .localOnly:
+        case .localSemantic:
             processingStage = .recognizing
             let lines = try await ocrService.recognizeText(in: image.cgImage)
-            extractedDrafts = try extractor.extractEvents(
+            extractedDrafts = try await extractLocalSemantic(
                 lines: lines,
                 capturedAt: image.capturedAt,
                 sourceFileName: image.fileName
             )
-            extractionNotice = .local
         case .accuracy:
             processingStage = .checkingSubscription
             guard canUseAccuracy else { throw accuracyRequirementError() }
@@ -797,6 +807,55 @@ final class SnapCalModel {
         }
     }
 
+    private func extractLocalSemantic(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> [EventDraft] {
+        processingStage = .extracting
+        let deterministicResult = Result<[EventDraft], Error> {
+            try extractor.extractEvents(
+                lines: lines,
+                capturedAt: capturedAt,
+                sourceFileName: sourceFileName
+            )
+        }
+
+        do {
+            let result = try await localSemanticExtractor.extract(
+                lines: lines,
+                capturedAt: capturedAt,
+                sourceFileName: sourceFileName
+            )
+            guard !result.drafts.isEmpty else {
+                throw LocalSemanticExtractionError.noEventDetected
+            }
+            extractionNotice = .localSemantic(model: result.model)
+            return reconcile(
+                proposed: result.drafts,
+                baseline: (try? deterministicResult.get()) ?? [],
+                proposedSource: "Apple's on-device model",
+                baselineSource: "deterministic extraction"
+            )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard case .success(var deterministicDrafts) = deterministicResult else {
+                return try deterministicResult.get()
+            }
+            let reason = localSemanticFallbackReason(for: error)
+            for index in deterministicDrafts.indices {
+                deterministicDrafts[index].ambiguities.append(DraftAmbiguity(
+                    field: .extraction,
+                    message: "Local Semantic used deterministic on-device extraction because the Apple model was unavailable or its proposal could not be safely validated.",
+                    severity: .medium
+                ))
+            }
+            extractionNotice = .localSemanticFallback(reason: reason)
+            return deterministicDrafts
+        }
+    }
+
     private func extractAccuracy(
         image: ValidatedImage,
         preparedImage: PreparedAccuracyImage?,
@@ -838,7 +897,12 @@ final class SnapCalModel {
                 applyAccuracyQuota(quota)
             }
             extractionNotice = .openRouter(model: result.model)
-            return reconcile(cloud: result.drafts, local: localCandidates ?? [])
+            return reconcile(
+                proposed: result.drafts,
+                baseline: localCandidates ?? [],
+                proposedSource: "OpenRouter",
+                baselineSource: "on-device extraction"
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -850,12 +914,20 @@ final class SnapCalModel {
                     severity: .medium
                 ))
             }
-            extractionNotice = .localFallback(
+            extractionNotice = .accuracyFallback(
                 reason: (error as? LocalizedError)?.errorDescription
                     ?? "Accuracy Mode was unavailable."
             )
             return localCandidates
         }
+    }
+
+    private func localSemanticFallbackReason(for error: Error) -> String {
+        if let semanticError = error as? LocalSemanticExtractionError,
+           let description = semanticError.errorDescription {
+            return description
+        }
+        return "Apple's on-device language model could not complete this extraction."
     }
 
     private func applyAccuracyQuota(_ quota: AccuracyQuota) {
@@ -1011,27 +1083,32 @@ final class SnapCalModel {
             ?? "Local privacy controls are temporarily unavailable."
     }
 
-    private func reconcile(cloud: EventDraft, local: EventDraft?) -> EventDraft {
-        guard let local else { return cloud }
-        var result = cloud
+    private func reconcile(
+        proposed: EventDraft,
+        baseline: EventDraft?,
+        proposedSource: String,
+        baselineSource: String
+    ) -> EventDraft {
+        guard let baseline else { return proposed }
+        var result = proposed
 
-        if let cloudStart = cloud.start.value,
-           let localStart = local.start.value,
-           !Calendar.current.isDate(cloudStart, inSameDayAs: localStart) {
+        if let proposedStart = proposed.start.value,
+           let baselineStart = baseline.start.value,
+           !isSameMinute(proposedStart, baselineStart) {
             result.ambiguities.append(DraftAmbiguity(
                 field: .dateTime,
-                message: "OpenRouter and on-device extraction found different dates. Verify the poster before creating the event.",
+                message: "\(proposedSource) and \(baselineSource) found different dates or times. Verify the screenshot before creating the event.",
                 severity: .high
             ))
             result.start.confidence = min(result.start.confidence, 0.49)
         }
 
-        if let cloudLocation = cloud.location.value,
-           let localLocation = local.location.value,
-           normalized(cloudLocation) != normalized(localLocation) {
+        if let proposedLocation = proposed.location.value,
+           let baselineLocation = baseline.location.value,
+           normalized(proposedLocation) != normalized(baselineLocation) {
             result.ambiguities.append(DraftAmbiguity(
                 field: .location,
-                message: "OpenRouter and on-device extraction found different locations. Review the location.",
+                message: "\(proposedSource) and \(baselineSource) found different locations. Review the location.",
                 severity: .medium
             ))
             result.location.confidence = min(result.location.confidence, 0.69)
@@ -1039,19 +1116,58 @@ final class SnapCalModel {
         return result
     }
 
-    private func reconcile(cloud: [EventDraft], local: [EventDraft]) -> [EventDraft] {
-        var remainingLocal = local
-        return cloud.map { cloudDraft in
-            guard let cloudStart = cloudDraft.start.value,
-                  let matchingIndex = remainingLocal.firstIndex(where: { candidate in
-                      guard let localStart = candidate.start.value else { return false }
-                      return Calendar.current.isDate(cloudStart, inSameDayAs: localStart)
-                  }) else {
-                return reconcile(cloud: cloudDraft, local: nil)
+    private func reconcile(
+        proposed: [EventDraft],
+        baseline: [EventDraft],
+        proposedSource: String,
+        baselineSource: String
+    ) -> [EventDraft] {
+        if proposed.count == baseline.count {
+            return zip(proposed, baseline).map {
+                reconcile(
+                    proposed: $0.0,
+                    baseline: $0.1,
+                    proposedSource: proposedSource,
+                    baselineSource: baselineSource
+                )
             }
-            let localDraft = remainingLocal.remove(at: matchingIndex)
-            return reconcile(cloud: cloudDraft, local: localDraft)
         }
+
+        var remainingBaseline = baseline
+        return proposed.map { proposedDraft in
+            guard let proposedStart = proposedDraft.start.value else {
+                return reconcile(
+                    proposed: proposedDraft,
+                    baseline: nil,
+                    proposedSource: proposedSource,
+                    baselineSource: baselineSource
+                )
+            }
+            let matchingIndex = remainingBaseline.enumerated()
+                .compactMap { index, candidate -> (Int, TimeInterval)? in
+                    guard let baselineStart = candidate.start.value else { return nil }
+                    return (index, abs(proposedStart.timeIntervalSince(baselineStart)))
+                }
+                .min { $0.1 < $1.1 }?
+                .0
+            let matchingBaseline = matchingIndex.map { remainingBaseline.remove(at: $0) }
+            return reconcile(
+                proposed: proposedDraft,
+                baseline: matchingBaseline,
+                proposedSource: proposedSource,
+                baselineSource: baselineSource
+            )
+        }
+    }
+
+    private func isSameMinute(_ left: Date, _ right: Date) -> Bool {
+        Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: left
+        ) == Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: right
+        )
     }
 
     private func normalized(_ value: String) -> String {

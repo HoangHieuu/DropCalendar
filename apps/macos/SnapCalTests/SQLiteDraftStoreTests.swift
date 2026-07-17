@@ -25,6 +25,69 @@ final class SQLiteDraftStoreTests: XCTestCase {
         XCTAssertEqual(restored.1, .openRouter(model: "test/model"))
     }
 
+    func testRoundTripPreservesLocalSemanticAndAccuracyFallbackProvenance() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let notices: [ExtractionNotice] = [
+            .localSemantic(model: "Apple Foundation Models"),
+            .localSemanticFallback(
+                reason: "Apple Intelligence is not enabled on this Mac."
+            ),
+            .accuracyFallback(reason: "Accuracy Mode is temporarily unavailable."),
+        ]
+        let store = try SQLiteDraftStore(databaseURL: fixture.databaseURL)
+
+        for notice in notices {
+            let stored = makePersistedDraft(
+                id: UUID(),
+                extractionNotice: notice
+            )
+            try await store.save(stored)
+
+            let loadedValue = try await store.load(id: stored.id)
+            let loaded = try XCTUnwrap(loadedValue)
+            let restored = try loaded.restore()
+
+            XCTAssertEqual(restored.1, notice)
+        }
+    }
+
+    func testLegacyLocalSourcesRestoreWithoutMislabelingAccuracyFallback() throws {
+        let original = makePersistedDraft()
+        let encoded = try JSONEncoder().encode(original)
+        let baseObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        let cases: [(kind: String, expected: ExtractionNotice)] = [
+            (
+                "local",
+                .localSemanticFallback(
+                    reason: "This saved draft used deterministic local extraction before Local Semantic was introduced."
+                )
+            ),
+            (
+                "localFallback",
+                .accuracyFallback(
+                    reason: "This saved Accuracy draft used the deterministic on-device fallback."
+                )
+            ),
+        ]
+
+        for legacyCase in cases {
+            var object = baseObject
+            object["extractionSource"] = ["kind": legacyCase.kind]
+            let legacyPayload = try JSONSerialization.data(withJSONObject: object)
+
+            let decoded = try JSONDecoder().decode(
+                PersistedDraft.self,
+                from: legacyPayload
+            )
+            let restored = try decoded.restore()
+
+            XCTAssertEqual(restored.1, legacyCase.expected)
+        }
+    }
+
     func testRecentOrderingUpdateAndExplicitDeletion() async throws {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
@@ -169,7 +232,8 @@ final class SQLiteDraftStoreTests: XCTestCase {
         id: UUID = UUID(),
         updatedAt: Date = Date(timeIntervalSince1970: 200),
         title: String = "Hội thảo AI",
-        sourceFingerprint: String? = nil
+        sourceFingerprint: String? = nil,
+        extractionNotice: ExtractionNotice = .openRouter(model: "test/model")
     ) -> PersistedDraft {
         let start = Date(timeIntervalSince1970: 1_787_415_400)
         let draft = EventDraft(
@@ -217,7 +281,7 @@ final class SQLiteDraftStoreTests: XCTestCase {
         return PersistedDraft(
             draft: draft,
             updatedAt: updatedAt,
-            extractionNotice: .openRouter(model: "test/model"),
+            extractionNotice: extractionNotice,
             lifecycle: .draft,
             receipt: nil
         )

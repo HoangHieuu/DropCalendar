@@ -1,23 +1,105 @@
 import Foundation
 
 enum ExtractionMode: String, CaseIterable, Identifiable {
-    case localOnly
+    case localSemantic
     case accuracy
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .localOnly: return "Local Only"
+        case .localSemantic: return "Local Semantic"
         case .accuracy: return "Accuracy Mode"
         }
     }
 }
 
 enum ExtractionNotice: Equatable {
-    case local
+    case localSemantic(model: String)
+    case localSemanticFallback(reason: String)
     case openRouter(model: String)
-    case localFallback(reason: String)
+    case accuracyFallback(reason: String)
+}
+
+protocol LocalSemanticEventExtracting {
+    func extract(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> LocalSemanticExtractionResult
+}
+
+struct LocalSemanticExtractionResult {
+    let drafts: [EventDraft]
+    let model: String
+}
+
+enum LocalSemanticUnavailableReason: Equatable {
+    case frameworkUnavailable
+    case operatingSystemUnsupported
+    case deviceNotEligible
+    case appleIntelligenceNotEnabled
+    case modelNotReady
+    case unsupportedLocale
+
+    var fallbackDescription: String {
+        switch self {
+        case .frameworkUnavailable:
+            return "Apple's on-device language model is not included in this build."
+        case .operatingSystemUnsupported:
+            return "Apple's on-device language model requires macOS 26 or later."
+        case .deviceNotEligible:
+            return "This Mac is not eligible for Apple's on-device language model."
+        case .appleIntelligenceNotEnabled:
+            return "Apple Intelligence is not enabled on this Mac."
+        case .modelNotReady:
+            return "Apple's on-device language model is not ready yet."
+        case .unsupportedLocale:
+            return "Apple's on-device language model does not support the detected language."
+        }
+    }
+}
+
+enum LocalSemanticExtractionError: LocalizedError, Equatable {
+    case unavailable(LocalSemanticUnavailableReason)
+    case contextTooLarge
+    case invalidOutput
+    case noEventDetected
+    case refused
+    case rateLimited
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(let reason):
+            return reason.fallbackDescription
+        case .contextTooLarge:
+            return "The recognized text was too large for Apple's on-device language model."
+        case .invalidOutput:
+            return "Apple's on-device language model returned a proposal that could not be safely validated."
+        case .noEventDetected:
+            return "Apple's on-device language model did not find a supported event."
+        case .refused:
+            return "Apple's on-device language model did not process this screenshot."
+        case .rateLimited:
+            return "Apple's on-device language model is temporarily busy."
+        }
+    }
+}
+
+struct DisabledLocalSemanticEventExtractor: LocalSemanticEventExtracting {
+    let reason: LocalSemanticUnavailableReason
+
+    init(reason: LocalSemanticUnavailableReason = .frameworkUnavailable) {
+        self.reason = reason
+    }
+
+    func extract(
+        lines: [RecognizedTextLine],
+        capturedAt: Date,
+        sourceFileName: String
+    ) async throws -> LocalSemanticExtractionResult {
+        throw LocalSemanticExtractionError.unavailable(reason)
+    }
 }
 
 protocol CloudEventExtracting {
